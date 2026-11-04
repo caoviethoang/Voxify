@@ -10,9 +10,9 @@ from app.providers.base import TTSProvider
 logger = logging.getLogger(__name__)
 
 # Ngưỡng ký tự tối đa cho mỗi lần gọi edge-tts.
-# Microsoft silently closes WebSocket cho văn bản dài / nhiều dấu Unicode tiếng Việt.
-# Giữ nhỏ (~150 ký tự) để tránh bị từ chối.
-_MICRO_CHUNK_MAX = 150
+# Microsoft silently closes WebSocket cho văn bản dài / nhiều dấu Unicode tiếng Việt (đặc biệt giọng HoaiMy).
+# Giữ nhỏ (~80 ký tự) để chia theo dấu phẩy/mệnh đề tự nhiên và tránh bị Microsoft từ chối NoAudioReceived.
+_MICRO_CHUNK_MAX = 80
 
 
 class EdgeTTSProvider(TTSProvider):
@@ -99,9 +99,9 @@ class EdgeTTSProvider(TTSProvider):
                 total=len(chunks),
             )
             all_audio.append(chunk_audio)
-            # Delay nhỏ giữa các request tránh rate-limit của Microsoft
+            # Delay an toàn giữa các request tránh rate-limit / connection drops của Microsoft Bing
             if i < len(chunks) - 1:
-                await asyncio.sleep(0.2)
+                await asyncio.sleep(0.25)
 
         return b"".join(all_audio)
 
@@ -116,14 +116,22 @@ class EdgeTTSProvider(TTSProvider):
         total: int,
         max_retries: int = 3,
     ) -> bytes:
-        """Tổng hợp giọng nói cho một đoạn văn bản nhỏ, có retry."""
+        """Tổng hợp giọng nói cho một đoạn văn bản nhỏ, có retry và fallback dự phòng."""
         last_exception: Exception | None = None
+        target_voice = voice
 
         for attempt in range(1, max_retries + 1):
             try:
+                # Nếu lần thử cuối cùng vẫn thất bại do giọng đặc thù (như HoaiMy), thử fallback giọng cùng ngôn ngữ
+                if attempt == max_retries:
+                    if voice == "vi-VN-HoaiMyNeural":
+                        target_voice = "vi-VN-NamMinhNeural"
+                    elif voice == "vi-VN-NamMinhNeural":
+                        target_voice = "vi-VN-HoaiMyNeural"
+
                 communicate = edge_tts.Communicate(
                     text=chunk,
-                    voice=voice,
+                    voice=target_voice,
                     rate=rate,
                     pitch=pitch,
                     volume=volume,
@@ -138,14 +146,14 @@ class EdgeTTSProvider(TTSProvider):
                     raise RuntimeError("Không nhận được dữ liệu âm thanh từ dịch vụ.")
 
                 logger.debug(
-                    f"Chunk {chunk_index}/{total} OK: {len(b''.join(audio_chunks))} bytes"
+                    f"Chunk {chunk_index}/{total} OK (voice: {target_voice}): {len(b''.join(audio_chunks))} bytes"
                 )
                 return b"".join(audio_chunks)
 
             except Exception as e:
                 last_exception = e
                 logger.warning(
-                    f"Chunk {chunk_index}/{total} – thử {attempt}/{max_retries} thất bại: {e}"
+                    f"Chunk {chunk_index}/{total} (voice: {target_voice}) – thử {attempt}/{max_retries} thất bại: {e}"
                 )
                 if attempt < max_retries:
                     await asyncio.sleep(0.5 * attempt)  # back-off tuyến tính

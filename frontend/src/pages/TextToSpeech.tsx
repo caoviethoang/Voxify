@@ -158,8 +158,10 @@ export default function TextToSpeech() {
           preview: isPreview,
         })
 
+        if (!result) return
+
         // Cập nhật số dư credit lên Topbar và Sidebar tức thì
-        if (result && 'creditBalance' in result && typeof result.creditBalance === 'number') {
+        if (typeof result.creditBalance === 'number') {
           updateCredits(result.creditBalance)
         } else {
           refreshUser()
@@ -167,6 +169,8 @@ export default function TextToSpeech() {
 
         toast.success(isPreview ? 'Đã tạo bản nghe thử 200 ký tự!' : 'Tổng hợp giọng nói thành công!')
       } catch (err: unknown) {
+        // Làm mới lại số dư user khi gặp lỗi để phản ánh số credit đã hoàn trả (refund)
+        refreshUser()
         const msg = err instanceof Error ? err.message : 'Lỗi khi tạo giọng nói'
         toast.error(msg)
       }

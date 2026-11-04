@@ -59,7 +59,7 @@ export function useTTS() {
         msg = err.message
       }
       setError(msg)
-      return null
+      throw new Error(msg)
     } finally {
       setIsLoading(false)
     }
