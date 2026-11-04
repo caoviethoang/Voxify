@@ -24,7 +24,7 @@ STATIC_DIR = BASE_DIR / "static"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Vòng đời ứng dụng: khởi tạo bộ đệm giọng nói khi khởi động."""
+    """Vòng đời ứng dụng: khởi tạo bộ đệm giọng nói và hiển thị thông tin máy chủ."""
     logger.info(f"Đang khởi động ứng dụng: {settings.app_name}")
     try:
         # Làm ấm cache danh sách giọng đọc trong nền
@@ -33,6 +33,16 @@ async def lifespan(app: FastAPI):
         logger.info("Khởi tạo cache giọng đọc hoàn tất thành công.")
     except Exception as e:
         logger.warning(f"Chưa thể nạp trước danh sách giọng đọc: {e}")
+
+    # In banner đường dẫn truy cập rõ ràng trên terminal
+    port = settings.port
+    print("\n" + "=" * 58)
+    print(f"  🚀 {settings.app_name} đang hoạt động thành công!")
+    print(f"  ➜  Local Web:   http://localhost:{port}/")
+    print(f"  ➜  Network Web: http://0.0.0.0:{port}/")
+    print(f"  ➜  API Docs:    http://localhost:{port}/docs")
+    print("=" * 58 + "\n", flush=True)
+
     yield
     logger.info(f"Đang dừng ứng dụng {settings.app_name}.")
 
@@ -57,6 +67,12 @@ app.add_middleware(
 app.include_router(config_router)
 app.include_router(voices_router)
 app.include_router(tts_router)
+
+
+# Endpoint kiểm tra sức khỏe hệ thống (Health Check)
+@app.get("/health", include_in_schema=False)
+async def health_check():
+    return {"status": "ok", "app": settings.app_name}
 
 
 # Xử lý trang chủ trả về static/index.html
