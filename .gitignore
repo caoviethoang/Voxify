@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment & standalone runtimes
+.venv/
+.bin/
+.python311/
+env/
+venv/
+ENV/
+
+# Configuration
+.env
+
+# Storage and temp
+storage/
+temp/
+*.mp3
+*.wav
+*.zip
+
+# IDE & OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store

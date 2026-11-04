@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Text-to-Speech Studio</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Header / Navigation -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="22"></line>
+            <line x1="8" y1="22" x2="16" y2="22"></line>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1 class="brand-title" id="appBrandTitle">TTS Studio</h1>
+          <span class="badge badge-primary">Tiếng Việt ưu tiên</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="engine-badge" title="Engine giọng nói miễn phí thử nghiệm">
+          <span class="pulse-dot"></span>
+          <span>Engine: Edge-TTS</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-container">
+    <section class="studio-grid">
+      
+      <!-- Cột Trái: Trình soạn thảo văn bản & Audio Player -->
+      <div class="panel text-editor-panel">
+        <div class="panel-header">
+          <div class="panel-title-wrap">
+            <h2 class="panel-title">Nội dung văn bản</h2>
+            <p class="panel-subtitle">Nhập đoạn văn bản bạn muốn chuyển đổi thành giọng đọc tự nhiên</p>
+          </div>
+          <div class="editor-quick-actions">
+            <button type="button" class="btn-text" id="btnSampleText" title="Điền văn bản mẫu tiếng Việt">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              Văn bản mẫu
+            </button>
+            <button type="button" class="btn-text text-danger" id="btnClearText" title="Xóa nội dung">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              Xóa
+            </button>
+          </div>
+        </div>
+
+        <div class="textarea-wrapper">
+          <textarea 
+            id="textInput" 
+            class="text-input" 
+            placeholder="Nhập hoặc dán nội dung văn bản tiếng Việt tại đây (tối đa 20.000 ký tự)..."
+            maxlength="20000"
+            rows="10"
+          ></textarea>
+        </div>
+
+        <!-- Bộ đếm ký tự và phân đoạn -->
+        <div class="editor-footer">
+          <div class="chunk-info" id="chunkInfo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            <span id="chunkInfoText">1 đoạn xử lý trực tiếp</span>
+          </div>
+          <div class="char-counter">
+            <span id="charCount">0</span> / <span id="maxCharLimit">20.000</span> ký tự
+          </div>
+        </div>
+
+        <!-- Trình phát Audio Player sau khi tạo -->
+        <div class="player-card" id="playerCard" style="display: none;">
+          <div class="player-header">
+            <div class="player-title-info">
+              <span class="player-badge">Audio sẵn sàng</span>
+              <span class="player-voice-name" id="playerVoiceLabel">vi-VN-HoaiMyNeural</span>
+            </div>
+            <div class="player-download-wrap">
+              <button class="btn btn-outline btn-sm" id="btnDownload" title="Tải xuống tệp MP3">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                Tải MP3
+              </button>
+            </div>
+          </div>
+
+          <div class="player-body">
+            <audio id="audioElement" preload="metadata" controls class="native-audio-player"></audio>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Cột Phải: Chọn giọng đọc & Tinh chỉnh thông số -->
+      <div class="panel settings-panel">
+        
+        <!-- Chọn Giọng Đọc -->
+        <div class="setting-group">
+          <div class="group-header">
+            <label class="group-label">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line><line x1="8" y1="22" x2="16" y2="22"></line></svg>
+              Giọng đọc
+            </label>
+            <span class="voice-count-tag" id="voiceStatsBadge">Đang tải...</span>
+          </div>
+
+          <!-- Lọc và tìm kiếm giọng -->
+          <div class="voice-filter-bar">
+            <div class="search-input-wrap">
+              <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" id="voiceSearchInput" class="search-input" placeholder="Tìm theo tên, ngôn ngữ, giới tính...">
+            </div>
+          </div>
+
+          <!-- Tabs bộ lọc nhanh -->
+          <div class="voice-tabs">
+            <button type="button" class="tab-btn active" data-filter="vietnamese">Tiếng Việt</button>
+            <button type="button" class="tab-btn" data-filter="all">Tất cả</button>
+            <button type="button" class="tab-btn" data-filter="female">Nữ</button>
+            <button type="button" class="tab-btn" data-filter="male">Nam</button>
+          </div>
+
+          <!-- Danh sách giọng đọc có thể cuộn -->
+          <div class="voice-list" id="voiceList">
+            <div class="voice-loading">
+              <div class="spinner-sm"></div>
+              <span>Đang tải danh sách giọng đọc...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tinh chỉnh Giọng Nói -->
+        <div class="setting-group sliders-group">
+          <div class="group-header">
+            <label class="group-label">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+              Tinh chỉnh âm thanh
+            </label>
+            <button type="button" class="btn-text text-muted" id="btnResetControls" title="Khôi phục thông số chuẩn">
+              Đặt lại
+            </button>
+          </div>
+
+          <!-- Tốc độ (Rate) -->
+          <div class="slider-row">
+            <div class="slider-info">
+              <span class="slider-name">Tốc độ đọc (Speed)</span>
+              <span class="slider-val" id="rateValLabel">1.0x (0%)</span>
+            </div>
+            <input type="range" id="rateSlider" min="-50" max="100" value="0" step="5" class="custom-slider">
+            <div class="slider-scale">
+              <span>Chậm (0.5x)</span>
+              <span>Chuẩn (1.0x)</span>
+              <span>Nhanh (2.0x)</span>
+            </div>
+          </div>
+
+          <!-- Cao độ (Pitch) -->
+          <div class="slider-row">
+            <div class="slider-info">
+              <span class="slider-name">Cao độ (Pitch)</span>
+              <span class="slider-val" id="pitchValLabel">0Hz</span>
+            </div>
+            <input type="range" id="pitchSlider" min="-50" max="50" value="0" step="2" class="custom-slider">
+            <div class="slider-scale">
+              <span>Trầm (-50Hz)</span>
+              <span>Chuẩn (0Hz)</span>
+              <span>Bổng (+50Hz)</span>
+            </div>
+          </div>
+
+          <!-- Âm lượng (Volume) -->
+          <div class="slider-row">
+            <div class="slider-info">
+              <span class="slider-name">Âm lượng (Volume)</span>
+              <span class="slider-val" id="volumeValLabel">0%</span>
+            </div>
+            <input type="range" id="volumeSlider" min="-50" max="50" value="0" step="5" class="custom-slider">
+            <div class="slider-scale">
+              <span>Nhỏ (-50%)</span>
+              <span>Chuẩn (0%)</span>
+              <span>Lớn (+50%)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Nhóm Nút Hành Động Chính -->
+        <div class="action-buttons-group">
+          <button type="button" class="btn btn-secondary" id="btnPreview" title="Tạo thử 200 ký tự đầu">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            <span>Nghe thử (200 ký tự)</span>
+          </button>
+          
+          <button type="button" class="btn btn-primary" id="btnGenerate">
+            <svg class="btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"></path></svg>
+            <span class="btn-spinner" style="display: none;"></span>
+            <span class="btn-text-content">Tạo giọng nói</span>
+          </button>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- Khu vực Lịch sử tạo trong phiên -->
+    <section class="history-section">
+      <div class="history-header">
+        <div class="history-title-wrap">
+          <h3 class="history-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            Lịch sử phiên làm việc
+          </h3>
+          <p class="history-subtitle">Các bản ghi âm đã tạo trong phiên làm việc hiện tại của trình duyệt</p>
+        </div>
+        <button type="button" class="btn-text text-muted" id="btnClearHistory" style="display: none;">
+          Xóa toàn bộ lịch sử
+        </button>
+      </div>
+
+      <div class="history-list" id="historyList">
+        <div class="history-empty">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>
+          <p>Chưa có bản ghi âm nào. Hãy nhập văn bản và bấm "Tạo giọng nói" hoặc "Nghe thử"!</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <div class="footer-container">
+      <p><span id="footerBrand">TTS Studio</span> &copy; 2026. Bản phát triển thử nghiệm Text-to-Speech tiếng Việt.</p>
+    </div>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
