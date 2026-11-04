@@ -1,0 +1,83 @@
+{
+  "common": {
+    "appName": "Voxify",
+    "comingSoon": "Sắp ra mắt",
+    "logout": "Đăng xuất",
+    "profile": "Hồ sơ cá nhân",
+    "settings": "Cài đặt",
+    "topUp": "Nạp thêm",
+    "creditsRemaining": "Còn {{count}} credit",
+    "lightMode": "Giao diện sáng",
+    "darkMode": "Giao diện tối",
+    "backToHome": "Quay về trang chủ",
+    "pageNotFound": "Trang không tìm thấy",
+    "pageNotFoundDesc": "Trang bạn đang tìm kiếm không tồn tại hoặc đã được chuyển đi.",
+    "loading": "Đang tải...",
+    "features": "Tính năng",
+    "quickCreate": "Tạo nhanh",
+    "recentActivity": "Hoạt động gần đây",
+    "viewAll": "Xem tất cả",
+    "exploreFeatures": "Khám phá tính năng",
+    "open": "Mở lại",
+    "history": "Xem lịch sử",
+    "copied": "Đã sao chép!"
+  },
+  "nav": {
+    "dashboard": "Bảng Điều Khiển",
+    "voice": "Voice",
+    "textToSpeech": "Text to Speech",
+    "speechToText": "Speech to Text",
+    "voiceClone": "Clone giọng nói (5s)",
+    "translation": "Dịch",
+    "video": "Video",
+    "tools": "Công cụ",
+    "processHistory": "Lịch Sử Xử Lý",
+    "extended": "MỞ RỘNG",
+    "upgradePlan": "Nâng Cấp Gói",
+    "affiliate": "Affiliate",
+    "apiDevelopers": "API & Developers",
+    "partners": "Đối Tác & Ưu Đãi"
+  },
+  "greetings": {
+    "morning": "Chào buổi sáng",
+    "afternoon": "Chào buổi chiều",
+    "evening": "Chào buổi tối"
+  },
+  "dashboard": {
+    "continueWork": "TIẾP TỤC CÔNG VIỆC",
+    "suggestedForYou": "GỢI Ý CHO BẠN",
+    "articleToVideo": "Article to Video",
+    "articleToVideoDesc": "Dán một link bài viết, nhận video ngắn có lồng tiếng sau vài phút.",
+    "autoVideoSeries": "Auto Video Series",
+    "autoVideoSeriesDesc": "Mỗi ngày tự có video mới từ tin tức, GitClub hay RSS, tự đăng lên kênh.",
+    "dubbing": "Dịch & Lồng tiếng video",
+    "dubbingDesc": "Phụ đề, lồng tiếng 100+ ngôn ngữ, giữ nhạc nền gốc.",
+    "musicVideo": "Music Video",
+    "musicVideoDesc": "Video lời bài hát chạy chữ theo nhạc.",
+    "subtitles": "Lồng tiếng phụ đề",
+    "subtitlesDesc": "Chuyển phụ đề thành giọng nói tự nhiên.",
+    "audioTranslation": "Dịch Audio",
+    "audioTranslationDesc": "Dịch và lồng tiếng audio đa ngôn ngữ.",
+    "createAudioFromText": "Tạo audio từ văn bản",
+    "createVideoFromArticle": "Tạo video từ bài viết",
+    "dubVideo": "Dịch & Lồng tiếng video",
+    "cloneVoiceAction": "Clone giọng nói (5s)",
+    "connectSocialChannels": "Kết nối kênh mạng xã hội"
+  },
+  "placeholder": {
+    "featureInDevelopment": "Tính năng đang được hoàn thiện",
+    "featureInDevelopmentDesc": "Đội ngũ phát triển đang tích cực xây dựng tính năng này để mang lại trải nghiệm tối ưu nhất cho bạn.",
+    "notifyMe": "Nhận thông báo khi ra mắt",
+    "backToDashboard": "Quay lại Bảng điều khiển"
+  },
+  "profile": {
+    "title": "Hồ sơ người dùng",
+    "email": "Email",
+    "fullName": "Họ và tên",
+    "role": "Vai trò",
+    "credits": "Số dư Credit",
+    "accountStatus": "Trạng thái",
+    "active": "Hoạt động",
+    "joinedAt": "Ngày tham gia"
+  }
+}

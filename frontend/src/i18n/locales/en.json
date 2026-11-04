@@ -1,0 +1,83 @@
+{
+  "common": {
+    "appName": "Voxify",
+    "comingSoon": "Coming Soon",
+    "logout": "Log Out",
+    "profile": "Profile",
+    "settings": "Settings",
+    "topUp": "Top Up",
+    "creditsRemaining": "{{count}} credits left",
+    "lightMode": "Light Mode",
+    "darkMode": "Dark Mode",
+    "backToHome": "Back to Home",
+    "pageNotFound": "Page Not Found",
+    "pageNotFoundDesc": "The page you are looking for does not exist or has been moved.",
+    "loading": "Loading...",
+    "features": "Features",
+    "quickCreate": "Quick Create",
+    "recentActivity": "Recent Activity",
+    "viewAll": "View all",
+    "exploreFeatures": "Explore Features",
+    "open": "Resume",
+    "history": "View history",
+    "copied": "Copied!"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "voice": "Voice",
+    "textToSpeech": "Text to Speech",
+    "speechToText": "Speech to Text",
+    "voiceClone": "Voice Clone (5s)",
+    "translation": "Translation",
+    "video": "Video",
+    "tools": "Tools",
+    "processHistory": "Process History",
+    "extended": "EXPAND",
+    "upgradePlan": "Upgrade Plan",
+    "affiliate": "Affiliate",
+    "apiDevelopers": "API & Developers",
+    "partners": "Partners & Deals"
+  },
+  "greetings": {
+    "morning": "Good morning",
+    "afternoon": "Good afternoon",
+    "evening": "Good evening"
+  },
+  "dashboard": {
+    "continueWork": "CONTINUE WORKING",
+    "suggestedForYou": "SUGGESTED FOR YOU",
+    "articleToVideo": "Article to Video",
+    "articleToVideoDesc": "Paste an article link, get a voiced short video in minutes.",
+    "autoVideoSeries": "Auto Video Series",
+    "autoVideoSeriesDesc": "Automated daily videos from news, GitHub or RSS feeds, auto-published to your channels.",
+    "dubbing": "Video Dubbing & Translation",
+    "dubbingDesc": "Subtitles & dubbing in 100+ languages while preserving original background music.",
+    "musicVideo": "Music Video",
+    "musicVideoDesc": "Lyric videos synchronized with background music.",
+    "subtitles": "Subtitle Dubbing",
+    "subtitlesDesc": "Turn subtitles into expressive natural speech.",
+    "audioTranslation": "Audio Translation",
+    "audioTranslationDesc": "Multilingual audio translation and dubbing.",
+    "createAudioFromText": "Create audio from text",
+    "createVideoFromArticle": "Create video from article",
+    "dubVideo": "Translate & dub video",
+    "cloneVoiceAction": "Clone voice (5s)",
+    "connectSocialChannels": "Connect social channels"
+  },
+  "placeholder": {
+    "featureInDevelopment": "Feature under development",
+    "featureInDevelopmentDesc": "Our team is actively building this capability to give you the highest quality experience.",
+    "notifyMe": "Notify me when launched",
+    "backToDashboard": "Back to Dashboard"
+  },
+  "profile": {
+    "title": "User Profile",
+    "email": "Email",
+    "fullName": "Full Name",
+    "role": "Role",
+    "credits": "Credit Balance",
+    "accountStatus": "Status",
+    "active": "Active",
+    "joinedAt": "Member since"
+  }
+}

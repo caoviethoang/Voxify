@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,8 +12,10 @@ from app.config import get_settings
 from app.core.errors import AppError, app_error_handler
 from app.core.logging import setup_logging
 from app.db import create_tables
-from app.dependencies import get_tts_service
+from app.dependencies import get_current_active_user, get_tts_service
+from app.models.user import User
 from app.routes import auth_router, config_router, tts_router, voices_router
+from app.schemas.auth import UserOut
 
 settings = get_settings()
 setup_logging("DEBUG" if settings.debug else "INFO")
@@ -77,6 +79,12 @@ app.include_router(auth_router)
 app.include_router(config_router)
 app.include_router(voices_router)
 app.include_router(tts_router)
+
+
+@app.get("/api/me", response_model=UserOut, summary="Lấy thông tin người dùng hiện tại (alias)")
+async def get_me_alias(current_user: User = Depends(get_current_active_user)):
+    """API lấy thông tin người dùng và số dư credit."""
+    return UserOut.model_validate(current_user)
 
 
 @app.get("/health", include_in_schema=False)

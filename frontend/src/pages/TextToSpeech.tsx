@@ -9,14 +9,13 @@ import VoiceSelector from '../components/VoiceSelector'
 import SliderControl from '../components/SliderControl'
 import AudioPlayer from '../components/AudioPlayer'
 import GenerationHistory from '../components/GenerationHistory'
-import ToastContainer from '../components/Toast'
 import type { HistoryItem } from '../hooks/useTTS'
 
 export default function TextToSpeech() {
   const { config } = useAppConfig()
   const { data: voiceData, isLoading: voicesLoading } = useVoices()
   const { isLoading, error, currentUrl, history, generate, clearHistory, setError } = useTTS()
-  const { toasts, showToast, removeToast } = useToast()
+  const { showToast } = useToast()
 
   const [text, setText] = useState('')
   const [selectedVoiceId, setSelectedVoiceId] = useState('')
@@ -247,8 +246,6 @@ export default function TextToSpeech() {
         onDownload={item => handleDownload(item.url, item.voiceId)}
         onClear={clearHistory}
       />
-
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   )
 }
