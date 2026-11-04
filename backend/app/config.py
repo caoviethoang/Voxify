@@ -16,15 +16,28 @@ class Settings(BaseSettings):
     port: int = 8000
     debug: bool = False
 
-    @field_validator("debug", mode="before")
-    @classmethod
-    def parse_debug(cls, v: Any) -> bool:
-        if isinstance(v, str):
-            return v.lower() in ("true", "1", "yes", "debug", "dev")
-        return bool(v)
+    # Frontend URL cho reset password & verify email links
+    frontend_url: str = "http://localhost:5173"
 
-    # Bảo mật
-    secret_key: str = "change-me-in-production"
+    # Bảo mật & JWT
+    secret_key: str = "change-me-in-production-use-openssl-rand-hex-32"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 30
+
+    # Xác thực email (bật/tắt)
+    require_email_verification: bool = False
+
+    # Google OAuth
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
+    # Email SMTP / Resend (dev in ra console nếu thiếu host)
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    emails_from: str = "noreply@voxify.app"
 
     # Database (SQLite mặc định khi dev, PostgreSQL khi prod)
     database_url: str = "sqlite+aiosqlite:///./storage/db.sqlite"
@@ -43,6 +56,20 @@ class Settings(BaseSettings):
     # Giới hạn xử lý
     max_chars: int = 20000
     chunk_size: int = 2500
+
+    @field_validator("debug", mode="before")
+    @classmethod
+    def parse_debug(cls, v: Any) -> bool:
+        if isinstance(v, str):
+            return v.lower() in ("true", "1", "yes", "debug", "dev")
+        return bool(v)
+
+    @field_validator("require_email_verification", mode="before")
+    @classmethod
+    def parse_require_email(cls, v: Any) -> bool:
+        if isinstance(v, str):
+            return v.lower() in ("true", "1", "yes")
+        return bool(v)
 
     # Legacy aliases để tương thích với code cũ
     @property

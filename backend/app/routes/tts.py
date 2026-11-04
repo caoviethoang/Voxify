@@ -1,11 +1,13 @@
 """Route POST /api/tts — tổng hợp giọng nói và lưu Generation vào DB."""
 import logging
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
-from app.dependencies import get_tts_service
+from app.dependencies import get_tts_service, get_optional_current_user
 from app.models.generation import Generation
+from app.models.user import User
 from app.schemas.tts import TTSRequest
 from app.services.tts_service import TTSService
 from app.services.storage_service import StorageService
@@ -22,6 +24,7 @@ async def synthesize_speech(
     request: TTSRequest,
     tts_service: TTSService = Depends(get_tts_service),
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ):
     """
     Nhận văn bản, tổng hợp MP3 qua TTS provider, lưu record vào DB,
@@ -52,6 +55,7 @@ async def synthesize_speech(
                 is_preview=bool(request.preview),
             )
             generation = Generation(
+                user_id=current_user.id if current_user else None,
                 text=clean_text,
                 voice=request.voice,
                 rate=request.rate or "+0%",

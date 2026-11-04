@@ -13,7 +13,7 @@ from app.core.errors import AppError, app_error_handler
 from app.core.logging import setup_logging
 from app.db import create_tables
 from app.dependencies import get_tts_service
-from app.routes import config_router, tts_router, voices_router
+from app.routes import auth_router, config_router, tts_router, voices_router
 
 settings = get_settings()
 setup_logging("DEBUG" if settings.debug else "INFO")
@@ -73,6 +73,7 @@ app.add_middleware(
 app.add_exception_handler(AppError, app_error_handler)
 
 # Đăng ký routes API
+app.include_router(auth_router)
 app.include_router(config_router)
 app.include_router(voices_router)
 app.include_router(tts_router)
