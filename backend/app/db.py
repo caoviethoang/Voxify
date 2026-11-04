@@ -43,3 +43,22 @@ async def create_tables() -> None:
     """Tạo tất cả bảng (dùng khi dev, production dùng Alembic)."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        # Nếu là SQLite, tự động bổ sung cột thiếu mà create_all không hỗ trợ cho bảng có sẵn
+        if "sqlite" in settings.database_url:
+            def _sync_sqlite_columns(sync_conn):
+                from sqlalchemy import text
+                user_cols = [r[1] for r in sync_conn.execute(text("PRAGMA table_info(users)")).fetchall()]
+                if user_cols and "credit_balance" not in user_cols:
+                    sync_conn.execute(text("ALTER TABLE users ADD COLUMN credit_balance INTEGER NOT NULL DEFAULT 10000"))
+                    if "credits" in user_cols:
+                        sync_conn.execute(text("UPDATE users SET credit_balance = credits WHERE credit_balance IS NULL OR credit_balance = 0"))
+
+                tx_cols = [r[1] for r in sync_conn.execute(text("PRAGMA table_info(credit_transactions)")).fetchall()]
+                if tx_cols:
+                    if "type" not in tx_cols:
+                        sync_conn.execute(text("ALTER TABLE credit_transactions ADD COLUMN type VARCHAR(30) NOT NULL DEFAULT 'usage'"))
+                    if "ref_id" not in tx_cols:
+                        sync_conn.execute(text("ALTER TABLE credit_transactions ADD COLUMN ref_id VARCHAR(100)"))
+
+            await conn.run_sync(_sync_sqlite_columns)

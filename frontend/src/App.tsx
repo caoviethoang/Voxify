@@ -7,6 +7,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Dashboard from './pages/Dashboard'
 import TextToSpeech from './pages/TextToSpeech'
 import VoiceLibrary from './pages/VoiceLibrary'
+import CreditHistory from './pages/CreditHistory'
 import PlaceholderPage from './pages/PlaceholderPage'
 import Profile from './pages/Profile'
 import NotFound from './pages/NotFound'
@@ -48,6 +49,10 @@ export default function App() {
 
               {/* Thư viện giọng đọc */}
               <Route path="/voices" element={<VoiceLibrary />} />
+
+              {/* Lịch sử giao dịch Credit */}
+              <Route path="/credits" element={<CreditHistory />} />
+              <Route path="/credits/history" element={<CreditHistory />} />
 
               {/* Hồ sơ người dùng */}
               <Route path="/profile" element={<Profile />} />

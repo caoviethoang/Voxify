@@ -14,7 +14,7 @@ from app.core.logging import setup_logging
 from app.db import create_tables
 from app.dependencies import get_current_active_user, get_tts_service
 from app.models.user import User
-from app.routes import auth_router, config_router, tts_router, voices_router
+from app.routes import auth_router, config_router, credit_router, tts_router, voices_router
 from app.schemas.auth import UserOut
 
 settings = get_settings()
@@ -77,6 +77,7 @@ app.add_exception_handler(AppError, app_error_handler)
 # Đăng ký routes API
 app.include_router(auth_router)
 app.include_router(config_router)
+app.include_router(credit_router)
 app.include_router(voices_router)
 app.include_router(tts_router)
 

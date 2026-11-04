@@ -89,6 +89,14 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
       keywords: 'pricing goi cuoc nap credit',
     },
     {
+      id: 'nav-credits',
+      title: 'Lịch sử biến động Credit',
+      category: 'Điều hướng',
+      icon: Coins,
+      action: () => navigate('/credits'),
+      keywords: 'credits lich su giao dich so cai ledger balance',
+    },
+    {
       id: 'nav-profile',
       title: t('common.profile') || 'Hồ sơ người dùng',
       category: 'Điều hướng',

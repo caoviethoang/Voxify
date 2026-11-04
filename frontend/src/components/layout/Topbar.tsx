@@ -15,6 +15,7 @@ import {
   Command,
   User as UserIcon,
   Settings,
+  Coins,
   LogOut,
   ChevronDown,
   Edit2,
@@ -270,6 +271,15 @@ export default function Topbar({ onOpenMobileMenu }: TopbarProps) {
                   >
                     <UserIcon className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
                     <span>Hồ sơ cá nhân</span>
+                  </Link>
+
+                  <Link
+                    to="/credits"
+                    onClick={() => setAvatarOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-control text-xs font-medium text-slate-700 dark:text-white/70 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                  >
+                    <Coins className="w-4 h-4 text-amber-500" />
+                    <span>Lịch sử Credit</span>
                   </Link>
 
                   <Link

@@ -57,6 +57,15 @@ class Settings(BaseSettings):
     max_chars: int = 20000
     chunk_size: int = 2500
 
+    # Hệ thống Credit
+    credit_chars_per_credit: int = 1  # 1 ký tự = 1 credit mặc định
+    credit_signup_bonus: int = 10000  # Tặng credit khi đăng ký
+    credit_provider_multipliers: dict[str, float] = {
+        "edge": 1.0,
+        "azure": 1.2,
+        "elevenlabs": 2.0,
+    }
+
     @field_validator("debug", mode="before")
     @classmethod
     def parse_debug(cls, v: Any) -> bool:

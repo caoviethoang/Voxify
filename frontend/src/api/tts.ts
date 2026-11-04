@@ -31,9 +31,23 @@ export async function fetchVoices(): Promise<VoiceListResponse> {
   return data
 }
 
-export async function synthesize(params: SynthesizeParams): Promise<Blob> {
+export async function synthesize(
+  params: SynthesizeParams
+): Promise<Blob & { creditBalance?: number; creditUsed?: number }> {
   const response = await client.post('/tts', params, {
     responseType: 'blob',
   })
-  return response.data as Blob
+  const blob = response.data as Blob & { creditBalance?: number; creditUsed?: number }
+
+  const balHeader = response.headers['x-credit-balance']
+  if (balHeader !== undefined) {
+    blob.creditBalance = parseInt(balHeader, 10)
+  }
+
+  const usedHeader = response.headers['x-credit-used']
+  if (usedHeader !== undefined) {
+    blob.creditUsed = parseInt(usedHeader, 10)
+  }
+
+  return blob
 }

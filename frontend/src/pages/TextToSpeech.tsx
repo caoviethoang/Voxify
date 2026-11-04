@@ -1,4 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth'
 import { useAppConfig } from '../hooks/useAppConfig'
 import { useVoices } from '../hooks/useVoices'
 import { useTTS } from '../hooks/useTTS'
@@ -26,6 +28,8 @@ import {
   BookA,
   Search,
   RefreshCw,
+  Plus,
+  AlertTriangle,
 } from 'lucide-react'
 
 // Mẫu văn bản theo chủ đề
@@ -63,6 +67,7 @@ const SAMPLE_PROMPTS = [
 ]
 
 export default function TextToSpeech() {
+  const { user, updateCredits, refreshUser } = useAuth()
   const { config } = useAppConfig()
   const { data: voiceData } = useVoices()
   const { isLoading, currentUrl, history, generate, clearHistory } = useTTS()
@@ -111,6 +116,11 @@ export default function TextToSpeech() {
   const pitchStr = `${pitch >= 0 ? '+' : ''}${pitch}Hz`
   const volumeStr = `${volume >= 0 ? '+' : ''}${volume}%`
 
+  // Ước tính số credit tiêu tốn (1 credit = 1 ký tự)
+  const estimatedCredits = text.length
+  const userBalance = user?.credits ?? 0
+  const isInsufficient = text.trim().length > 0 && estimatedCredits > userBalance
+
   // Tổng hợp giọng nói
   const handleSynthesize = useCallback(
     async (isPreview: boolean) => {
@@ -119,11 +129,26 @@ export default function TextToSpeech() {
         return
       }
 
+      if (!isPreview) {
+        if (!user) {
+          toast.error('Vui lòng đăng nhập để sử dụng tính năng tạo giọng nói đầy đủ.')
+          return
+        }
+        if (estimatedCredits > userBalance) {
+          toast.error(
+            `Số dư credit không đủ (${userBalance.toLocaleString('vi-VN')} / ${estimatedCredits.toLocaleString(
+              'vi-VN'
+            )} credit). Vui lòng nạp thêm credit.`
+          )
+          return
+        }
+      }
+
       const voice = selectedVoiceId || config.default_voice || 'vi-VN-HoaiMyNeural'
       setReplayUrl(null)
 
       try {
-        await generate({
+        const result = await generate({
           text: text.trim(),
           voice,
           voiceName: selectedVoiceName,
@@ -132,13 +157,36 @@ export default function TextToSpeech() {
           volume: volumeStr,
           preview: isPreview,
         })
+
+        // Cập nhật số dư credit lên Topbar và Sidebar tức thì
+        if (result && 'creditBalance' in result && typeof result.creditBalance === 'number') {
+          updateCredits(result.creditBalance)
+        } else {
+          refreshUser()
+        }
+
         toast.success(isPreview ? 'Đã tạo bản nghe thử 200 ký tự!' : 'Tổng hợp giọng nói thành công!')
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Lỗi khi tạo giọng nói'
         toast.error(msg)
       }
     },
-    [text, selectedVoiceId, config.default_voice, rateStr, pitchStr, volumeStr, generate, toast]
+    [
+      text,
+      user,
+      estimatedCredits,
+      userBalance,
+      selectedVoiceId,
+      config.default_voice,
+      selectedVoiceName,
+      rateStr,
+      pitchStr,
+      volumeStr,
+      generate,
+      updateCredits,
+      refreshUser,
+      toast,
+    ]
   )
 
   // Phím tắt Ctrl+Enter hoặc Cmd+Enter để tạo nhanh
@@ -204,9 +252,6 @@ export default function TextToSpeech() {
   const activeUrl = replayUrl || currentUrl
   const activeVoiceName = replayUrl ? replayVoice : selectedVoiceName
   const activeIsPreview = replayUrl ? replayIsPreview : false
-
-  // Ước tính số credit tiêu tốn (1 credit = 1 ký tự)
-  const estimatedCredits = text.length
 
   return (
     <div className="flex flex-col lg:flex-row gap-5 animate-in fade-in duration-200">
@@ -321,15 +366,41 @@ export default function TextToSpeech() {
 
               {/* Ước tính credit tiêu tốn */}
               {estimatedCredits > 0 && (
-                <div className="flex items-center gap-1 text-[11px] font-mono text-[#F59E0B] bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">
-                  <Coins className="w-3 h-3" />
-                  <span>~{estimatedCredits.toLocaleString('vi-VN')} credit</span>
+                <div
+                  className={`flex items-center gap-1.5 text-[11px] font-mono px-2 py-0.5 rounded border ${
+                    isInsufficient
+                      ? 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20'
+                      : 'text-[#F59E0B] bg-amber-500/10 border-amber-500/20'
+                  }`}
+                >
+                  {isInsufficient ? (
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                  ) : (
+                    <Coins className="w-3.5 h-3.5 flex-shrink-0" />
+                  )}
+                  <span>
+                    {isInsufficient
+                      ? `Cần ~${estimatedCredits.toLocaleString('vi-VN')} credit (còn ${userBalance.toLocaleString('vi-VN')})`
+                      : `Sẽ dùng ~${estimatedCredits.toLocaleString('vi-VN')} credit`}
+                  </span>
                 </div>
               )}
             </div>
 
             {/* Các nút hành động chính */}
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2">
+              {/* Nút Nạp thêm nếu thiếu credit */}
+              {isInsufficient && (
+                <Link
+                  to="/pricing"
+                  className="flex items-center gap-1 px-3 py-2 rounded-control bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-xs transition-all"
+                  title="Số dư không đủ. Bấm để nạp thêm credit"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Nạp thêm</span>
+                </Link>
+              )}
+
               {/* Nút Nghe thử */}
               <button
                 type="button"
@@ -345,9 +416,13 @@ export default function TextToSpeech() {
               <button
                 type="button"
                 onClick={() => handleSynthesize(false)}
-                disabled={isLoading || !text.trim()}
+                disabled={isLoading || !text.trim() || isInsufficient}
                 className="flex items-center gap-2 px-5 py-2 rounded-control bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold shadow-lg shadow-indigo-600/25 transition-all"
-                title="Phím tắt: ⌘+Enter / Ctrl+Enter"
+                title={
+                  isInsufficient
+                    ? 'Số dư credit không đủ. Vui lòng nạp thêm!'
+                    : 'Phím tắt: ⌘+Enter / Ctrl+Enter'
+                }
               >
                 {isLoading ? (
                   <>

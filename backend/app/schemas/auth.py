@@ -36,6 +36,7 @@ class UserOut(BaseModel):
     is_active: bool
     is_verified: bool
     credits: int
+    credit_balance: Optional[int] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

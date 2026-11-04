@@ -64,9 +64,16 @@ class AuthService:
             is_admin=False,
             # Nếu hệ thống không bắt buộc xác thực email, đánh dấu verified luôn
             is_verified=not settings.require_email_verification,
-            credits=5000,
+            credit_balance=0,
+            credits=0,
         )
         db.add(user)
+        await db.flush()
+
+        # Tặng credit khi đăng ký qua CreditService (ghi nhận sổ cái ledger)
+        from app.services.credit_service import CreditService
+        await CreditService.add_signup_bonus(db, user.id)
+
         await db.commit()
         await db.refresh(user)
 
@@ -268,9 +275,15 @@ class AuthService:
             is_active=True,
             is_admin=False,
             is_verified=True,
-            credits=5000,
+            credit_balance=0,
+            credits=0,
         )
         db.add(new_user)
+        await db.flush()
+
+        from app.services.credit_service import CreditService
+        await CreditService.add_signup_bonus(db, new_user.id)
+
         await db.commit()
         await db.refresh(new_user)
         return new_user

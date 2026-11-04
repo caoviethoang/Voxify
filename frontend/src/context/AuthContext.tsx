@@ -19,6 +19,7 @@ interface AuthContextType {
   googleLogin: (credential: string) => Promise<void>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
+  updateCredits: (newCredits: number) => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -79,6 +80,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
+  const updateCredits = useCallback((newCredits: number) => {
+    setUser((prev) => (prev ? { ...prev, credits: newCredits, credit_balance: newCredits } : null))
+  }, [])
+
   return (
     <AuthContext.Provider
       value={{
@@ -90,6 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         googleLogin,
         logout,
         refreshUser,
+        updateCredits,
       }}
     >
       {children}

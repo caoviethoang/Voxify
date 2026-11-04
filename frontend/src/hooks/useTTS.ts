@@ -46,7 +46,7 @@ export function useTTS() {
         timestamp: new Date(),
       }
       setHistory(prev => [item, ...prev])
-      return { url, blob }
+      return { url, blob, creditBalance: blob.creditBalance }
     } catch (err: unknown) {
       let msg = 'Có lỗi xảy ra khi tạo giọng nói.'
       if (err && typeof err === 'object' && 'response' in err) {

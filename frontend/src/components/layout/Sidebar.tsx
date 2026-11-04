@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../hooks/useAuth'
 import { useAppConfig } from '../../hooks/useAppConfig'
@@ -24,6 +24,7 @@ import {
   Search,
   Share2,
   Disc,
+  Coins,
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -113,6 +114,7 @@ export default function Sidebar({
     tts: { id: 'tts', label: 'Studio (Text to Speech)', path: '/studio', icon: Mic },
     library: { id: 'library', label: 'Thư viện giọng', path: '/voices', icon: Volume2 },
     history: { id: 'history', label: t('nav.processHistory') || 'Lịch sử xử lý', path: '/history', icon: History },
+    credits: { id: 'credits', label: 'Lịch sử Credit', path: '/credits', icon: Coins },
     pricing: { id: 'pricing', label: t('nav.upgradePlan') || 'Gói cước', path: '/pricing', icon: Sparkles },
     affiliate: { id: 'affiliate', label: 'Giới thiệu bạn bè', path: '/affiliate', icon: Gift, badge: '25%' },
   }
@@ -469,6 +471,24 @@ export default function Sidebar({
             <History className="w-4 h-4 flex-shrink-0 text-indigo-500 dark:text-indigo-400" />
             {!isCollapsedMode && <span>Lịch sử xử lý</span>}
           </NavLink>
+
+          <NavLink
+            to="/credits"
+            onClick={handleLinkClick}
+            title="Lịch sử Credit"
+            className={({ isActive }) =>
+              `flex items-center rounded-control text-xs font-medium transition-all ${
+                isCollapsedMode ? 'justify-center py-2.5 px-0' : 'gap-2.5 px-2.5 py-2'
+              } ${
+                isActive
+                  ? 'bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30 font-semibold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-white/70 dark:hover:text-white dark:hover:bg-[#12151C]'
+              }`
+            }
+          >
+            <Coins className="w-4 h-4 flex-shrink-0 text-[#F59E0B]" />
+            {!isCollapsedMode && <span>Lịch sử Credit</span>}
+          </NavLink>
         </div>
 
         {/* Nhóm "Mở rộng" */}
@@ -589,11 +609,16 @@ export default function Sidebar({
 
           {/* Mini credit bar */}
           {!isCollapsedMode && (
-            <div className="space-y-1 pt-1 border-t border-slate-200/60 dark:border-white/[0.04]">
+            <Link
+              to="/credits"
+              onClick={handleLinkClick}
+              className="space-y-1 pt-1 border-t border-slate-200/60 dark:border-white/[0.04] block hover:opacity-80 transition-opacity"
+              title="Xem chi tiết sổ cái và lịch sử credit"
+            >
               <div className="flex justify-between text-[10px]">
-                <span className="text-slate-500 dark:text-white/40">Credit</span>
+                <span className="text-slate-500 dark:text-white/40">Credit (Lịch sử)</span>
                 <span className="font-mono text-[#F59E0B] font-semibold">
-                  {user?.credits?.toLocaleString('vi-VN') || '0'}
+                  {user?.credits?.toLocaleString('vi-VN') || '0'} &rarr;
                 </span>
               </div>
               <div className="h-1 w-full bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
@@ -602,7 +627,7 @@ export default function Sidebar({
                   style={{ width: `${Math.min(((user?.credits || 0) / 10000) * 100, 100)}%` }}
                 />
               </div>
-            </div>
+            </Link>
           )}
         </div>
 

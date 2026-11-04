@@ -19,8 +19,12 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     google_id: Mapped[Optional[str]] = mapped_column(String(100), unique=True, nullable=True, index=True)
-    # Credit tính bằng số nguyên (tránh floating-point), đơn vị: ký tự (khuyến mãi mặc định 5.000 ký tự)
-    credits: Mapped[int] = mapped_column(Integer, default=5000, nullable=False)
+    
+    # Cache cột users.credit_balance cập nhật trong cùng transaction DB (sổ cái ledger)
+    credit_balance: Mapped[int] = mapped_column(Integer, default=10000, nullable=False)
+    # Giữ cột credits để tương thích ngược với code cũ / migration cũ
+    credits: Mapped[int] = mapped_column(Integer, default=10000, nullable=False)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -37,7 +41,7 @@ class User(Base):
         "Generation", back_populates="user", lazy="select"
     )
     credit_transactions: Mapped[list["CreditTransaction"]] = relationship(
-        "CreditTransaction", back_populates="user", lazy="select"
+        "CreditTransaction", back_populates="user", lazy="select", cascade="all, delete-orphan"
     )
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
         "RefreshToken", back_populates="user", cascade="all, delete-orphan", lazy="select"
