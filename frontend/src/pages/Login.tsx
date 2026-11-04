@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
@@ -12,6 +12,64 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const googleBtnRef = useRef<HTMLDivElement>(null)
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
+
+  // Khởi tạo Google Identity Services nếu có Client ID
+  useEffect(() => {
+    if (!googleClientId) return
+
+    let checkInterval: any = null
+
+    const initGsi = () => {
+      if (window.google?.accounts?.id && googleBtnRef.current) {
+        try {
+          window.google.accounts.id.initialize({
+            client_id: googleClientId,
+            callback: async (response) => {
+              if (response.credential) {
+                setIsLoading(true)
+                setError(null)
+                try {
+                  await googleLogin(response.credential)
+                  navigate(from, { replace: true })
+                } catch (err: unknown) {
+                  let msg = 'Đăng nhập Google thất bại.'
+                  if (err && typeof err === 'object' && 'response' in err) {
+                    const axiosErr = err as { response?: { data?: { detail?: string } } }
+                    msg = axiosErr.response?.data?.detail || msg
+                  }
+                  setError(msg)
+                } finally {
+                  setIsLoading(false)
+                }
+              }
+            },
+          })
+
+          googleBtnRef.current.innerHTML = ''
+          window.google.accounts.id.renderButton(googleBtnRef.current, {
+            theme: 'filled_black',
+            size: 'large',
+            text: 'signin_with',
+            shape: 'rectangular',
+            width: 384,
+            locale: 'vi',
+          })
+          if (checkInterval) clearInterval(checkInterval)
+        } catch {
+          // Bỏ qua lỗi khởi tạo nếu chưa sẵn sàng
+        }
+      }
+    }
+
+    initGsi()
+    checkInterval = setInterval(initGsi, 500)
+    return () => {
+      if (checkInterval) clearInterval(checkInterval)
+    }
+  }, [googleClientId, googleLogin, navigate, from])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -40,28 +98,16 @@ export default function Login() {
     }
   }
 
-  // Google OAuth sign-in handler
-  const handleGoogleSignIn = async () => {
+  // Google Sign-in click handler khi chưa có Client ID hoặc GIS chưa gắn nút tự động
+  const handleManualGoogleClick = () => {
     setError(null)
-    setIsLoading(true)
-    try {
-      // Nếu có GOOGLE_CLIENT_ID, người dùng có thể dán id_token hoặc tương tác qua SDK
-      const token = prompt('Nhập Google ID Token (cho môi trường thử nghiệm):')
-      if (token) {
-        await googleLogin(token)
-        navigate(from, { replace: true })
-      } else {
-        setError('Tính năng Google Sign-In yêu cầu cấu hình GOOGLE_CLIENT_ID trong backend/.env.')
-      }
-    } catch (err: unknown) {
-      let msg = 'Đăng nhập Google thất bại.'
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axiosErr = err as { response?: { data?: { detail?: string } } }
-        msg = axiosErr.response?.data?.detail || msg
-      }
-      setError(msg)
-    } finally {
-      setIsLoading(false)
+    if (!googleClientId) {
+      setError('Chức năng Đăng nhập Google chưa được kích hoạt do chưa cấu hình VITE_GOOGLE_CLIENT_ID trong file .env.')
+      return
+    }
+
+    if (window.google?.accounts?.id) {
+      window.google.accounts.id.prompt()
     }
   }
 
@@ -84,7 +130,7 @@ export default function Login() {
 
         {error && (
           <div className="mb-5 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0">
               <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
             </svg>
             <span>{error}</span>
@@ -147,33 +193,39 @@ export default function Login() {
           </div>
         </div>
 
-        {/* Google OAuth Button */}
-        <button
-          type="button"
-          onClick={handleGoogleSignIn}
-          disabled={isLoading}
-          className="w-full py-2.5 border border-white/10 hover:border-white/20 hover:bg-white/5 text-white/80 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-2.5"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24">
-            <path
-              fill="#EA4335"
-              d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"
-            />
-            <path
-              fill="#4285F4"
-              d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z"
-            />
-            <path
-              fill="#FBBC05"
-              d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 10.8 0 12s.7 2.3 1.9 4.7l3.7-2.9z"
-            />
-            <path
-              fill="#34A853"
-              d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2-6.4-4.8L1.9 16.4C3.7 20.1 7.5 23 12 23z"
-            />
-          </svg>
-          Đăng nhập với Google
-        </button>
+        {/* Google OAuth Container */}
+        {googleClientId ? (
+          <div className="flex justify-center w-full min-h-[44px]">
+            <div ref={googleBtnRef} className="w-full flex justify-center" />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={handleManualGoogleClick}
+            disabled={isLoading}
+            className="w-full py-2.5 border border-white/10 hover:border-white/20 hover:bg-white/5 text-white/80 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-2.5 cursor-pointer"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24">
+              <path
+                fill="#EA4335"
+                d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"
+              />
+              <path
+                fill="#4285F4"
+                d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 10.8 0 12s.7 2.3 1.9 4.7l3.7-2.9z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2-6.4-4.8L1.9 16.4C3.7 20.1 7.5 23 12 23z"
+              />
+            </svg>
+            Đăng nhập với Google
+          </button>
+        )}
 
         {/* Register link */}
         <p className="text-center text-xs text-white/40 mt-6">

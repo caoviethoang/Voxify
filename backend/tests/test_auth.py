@@ -107,3 +107,4 @@ def test_forgot_password_flow():
     )
     assert forgot_res.status_code == 200
     assert "hướng dẫn" in forgot_res.json().get("message", "").lower()
+

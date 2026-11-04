@@ -83,3 +83,4 @@ def _send_email_or_log(
         logger.error(f"Lỗi khi gửi email qua SMTP: {e}")
         # In fallback link ra console để không block dev/test
         print(f"\n[FALLBACK EMAIL] {log_tag} for {to_email}: {action_url}\n", flush=True)
+

@@ -23,3 +23,4 @@ class RefreshToken(Base):
     )
 
     user: Mapped["User"] = relationship("User", back_populates="refresh_tokens")
+

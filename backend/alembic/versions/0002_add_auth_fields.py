@@ -46,3 +46,4 @@ def downgrade() -> None:
         batch_op.drop_column("role")
         batch_op.drop_column("full_name")
         batch_op.alter_column("hashed_password", existing_type=sa.String(255), nullable=False)
+
