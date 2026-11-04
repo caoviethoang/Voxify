@@ -43,6 +43,10 @@ Hệ thống chuyển đổi văn bản thành giọng nói (Text-to-Speech) ch�
 ├── tests/
 │   └── test_tts.py          # Bộ kiểm thử tự động pytest
 ├── requirements.txt         # Danh sách thư viện Python
+├── Dockerfile               # Cấu hình build Docker image multi-stage
+├── docker-compose.yml       # Cấu hình Docker Compose chạy service
+├── entrypoint.sh            # Script khởi tạo container
+├── .dockerignore            # Loại bỏ các file không cần thiết khi build Docker
 ├── .env.example             # Mẫu file cấu hình môi trường
 └── README.md                # Tài liệu hướng dẫn
 ```
@@ -51,11 +55,33 @@ Hệ thống chuyển đổi văn bản thành giọng nói (Text-to-Speech) ch�
 
 ## ⚙️ Cài đặt & Khởi chạy
 
-### 1. Yêu cầu môi trường
+### Cách 1: Chạy bằng Docker & Docker Compose (Khuyên dùng)
+
+```bash
+# 1. Sao chép file cấu hình
+cp .env.example .env
+
+# 2. Khởi động ứng dụng bằng Docker Compose
+docker compose up --build -d
+
+# 3. Xem logs hoạt động
+docker compose logs -f
+
+# 4. Dừng container khi không sử dụng
+docker compose down
+```
+
+Ứng dụng sẽ tự động chạy tại [http://localhost:8000](http://localhost:8000). Thư mục `./app` và `./static` được mount trực tiếp vào container giúp cập nhật code tức thì (hot-reload).
+
+---
+
+### Cách 2: Chạy trực tiếp trên máy chủ cục bộ (Local Python)
+
+#### 1. Yêu cầu môi trường
 - Python 3.11 trở lên
 - Git
 
-### 2. Thiết lập môi trường ảo & cài đặt thư viện
+#### 2. Thiết lập môi trường ảo & cài đặt thư viện
 
 ```bash
 # Tạo môi trường ảo
