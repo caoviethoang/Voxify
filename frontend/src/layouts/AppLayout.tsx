@@ -44,7 +44,7 @@ export default function AppLayout() {
   }, [handleToggleCollapse])
 
   return (
-    <div className="min-h-screen bg-[#0B0D12] dark:bg-[#0B0D12] bg-[#F8FAFC] text-slate-900 dark:text-white flex flex-col font-sans antialiased selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0B0D12] text-slate-900 dark:text-white flex flex-col font-sans antialiased selection:bg-indigo-500 selection:text-white">
       {/* 1. Thanh thông báo khuyến mãi / sự kiện trên cùng */}
       <AnnouncementBar />
 

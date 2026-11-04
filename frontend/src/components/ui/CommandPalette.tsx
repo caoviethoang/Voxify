@@ -201,9 +201,9 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
       />
 
       {/* Palette Container */}
-      <div className="relative w-full max-w-lg rounded-card bg-[#12151C] dark:bg-[#12151C] bg-white border border-white/[0.1] dark:border-white/[0.1] border-slate-200 shadow-2xl overflow-hidden z-10 animate-in fade-in zoom-in-95 duration-150">
+      <div className="relative w-full max-w-lg rounded-card bg-white dark:bg-[#12151C] border border-slate-200 dark:border-white/[0.1] shadow-2xl overflow-hidden z-10 animate-in fade-in zoom-in-95 duration-150">
         {/* Input bar */}
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-white/[0.08] dark:border-white/[0.08] border-slate-100">
+        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-200 dark:border-white/[0.08]">
           <Search className="w-5 h-5 text-slate-400 dark:text-white/40 flex-shrink-0" />
           <input
             ref={inputRef}
@@ -216,7 +216,7 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
             placeholder="Tìm trang, công cụ hoặc gõ lệnh... (↑ ↓ Enter)"
             className="w-full bg-transparent text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 focus:outline-none"
           />
-          <div className="flex items-center gap-1 text-[10px] font-mono text-slate-400 dark:text-white/40 bg-slate-100 dark:bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
+          <div className="flex items-center gap-1 text-[10px] font-mono text-slate-500 dark:text-white/40 bg-slate-100 dark:bg-white/5 px-1.5 py-0.5 rounded border border-slate-200 dark:border-white/5">
             <Command className="w-3 h-3" />
             <span>K</span>
           </div>
@@ -248,7 +248,7 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
                   onMouseEnter={() => setSelectedIndex(idx)}
                   className={`flex items-center justify-between px-3 py-2.5 rounded-control cursor-pointer transition-colors ${
                     isSelected
-                      ? 'bg-indigo-600/15 text-indigo-400 dark:bg-indigo-500/20 dark:text-white border border-indigo-500/30'
+                      ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-white border border-indigo-200 dark:border-indigo-500/30 font-semibold'
                       : 'text-slate-700 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-white/5'
                   }`}
                 >
@@ -256,15 +256,15 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
                     <div
                       className={`p-1.5 rounded-lg ${
                         isSelected
-                          ? 'bg-indigo-600 text-white shadow-sm'
+                          ? 'bg-indigo-600 text-white shadow-xs'
                           : 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/50'
                       }`}
                     >
                       <Icon className="w-4 h-4" />
                     </div>
-                    <span className="text-xs font-medium">{cmd.title}</span>
+                    <span className="text-xs">{cmd.title}</span>
                   </div>
-                  <span className="text-[10px] text-slate-400 dark:text-white/30">
+                  <span className="text-[10px] text-slate-400 dark:text-white/30 font-medium">
                     {cmd.category}
                   </span>
                 </div>
@@ -274,7 +274,7 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
         </div>
 
         {/* Footer shortcuts hint */}
-        <div className="px-4 py-2 border-t border-white/[0.06] dark:border-white/[0.06] border-slate-100 bg-[#0B0D12]/40 dark:bg-[#0B0D12]/40 bg-slate-50 flex items-center justify-between text-[11px] text-slate-400 dark:text-white/30 font-mono">
+        <div className="px-4 py-2 border-t border-slate-200 dark:border-white/[0.06] bg-slate-50 dark:bg-[#0B0D12]/40 flex items-center justify-between text-[11px] text-slate-500 dark:text-white/40 font-mono">
           <span>Dùng ↑ ↓ để chọn &middot; ↵ thực hiện</span>
           <span>ESC để thoát</span>
         </div>

@@ -6,13 +6,13 @@ export default function BottomTabBar() {
   const isStudio = location.pathname === '/studio' || location.pathname === '/tts' || location.pathname === '/voice/tts'
 
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 h-14 bg-[#0B0D12]/95 dark:bg-[#0B0D12]/95 bg-white/95 border-t border-white/[0.08] dark:border-white/[0.08] border-slate-200 backdrop-blur-lg flex items-center justify-around px-2 z-40 select-none">
+    <nav className="md:hidden fixed bottom-0 inset-x-0 h-14 bg-white/95 dark:bg-[#0B0D12]/95 border-t border-slate-200 dark:border-white/[0.08] backdrop-blur-lg flex items-center justify-around px-2 z-40 select-none">
       <NavLink
         to="/"
         end
         className={({ isActive }) =>
           `flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
-            isActive ? 'text-indigo-400 font-semibold' : 'text-slate-400 dark:text-white/40'
+            isActive ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-500 dark:text-white/40 hover:text-slate-800 dark:hover:text-white'
           }`
         }
       >
@@ -23,7 +23,7 @@ export default function BottomTabBar() {
       <NavLink
         to="/studio"
         className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
-          isStudio ? 'text-indigo-400 font-semibold' : 'text-slate-400 dark:text-white/40'
+          isStudio ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-500 dark:text-white/40 hover:text-slate-800 dark:hover:text-white'
         }`}
       >
         <Mic className="w-4 h-4" />
@@ -34,7 +34,7 @@ export default function BottomTabBar() {
         to="/voices"
         className={({ isActive }) =>
           `flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
-            isActive ? 'text-indigo-400 font-semibold' : 'text-slate-400 dark:text-white/40'
+            isActive ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-500 dark:text-white/40 hover:text-slate-800 dark:hover:text-white'
           }`
         }
       >
@@ -46,7 +46,7 @@ export default function BottomTabBar() {
         to="/history"
         className={({ isActive }) =>
           `flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
-            isActive ? 'text-indigo-400 font-semibold' : 'text-slate-400 dark:text-white/40'
+            isActive ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-500 dark:text-white/40 hover:text-slate-800 dark:hover:text-white'
           }`
         }
       >
@@ -58,7 +58,7 @@ export default function BottomTabBar() {
         to="/profile"
         className={({ isActive }) =>
           `flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
-            isActive ? 'text-indigo-400 font-semibold' : 'text-slate-400 dark:text-white/40'
+            isActive ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-500 dark:text-white/40 hover:text-slate-800 dark:hover:text-white'
           }`
         }
       >
