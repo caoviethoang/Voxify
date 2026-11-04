@@ -65,3 +65,4 @@ export default function PlaceholderPage({ title, subtitle }: PlaceholderPageProp
     </div>
   )
 }
+

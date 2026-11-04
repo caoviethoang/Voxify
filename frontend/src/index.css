@@ -4,24 +4,56 @@
 
 @layer base {
   :root {
-    --scrollbar-thumb: #3f3f5a;
-    --scrollbar-track: #14141f;
+    --scrollbar-thumb: #232836;
+    --scrollbar-track: #0B0D12;
   }
+
+  html.dark {
+    color-scheme: dark;
+    background-color: #0B0D12;
+    color: #F8FAFC;
+  }
+
+  html:not(.dark) {
+    color-scheme: light;
+    background-color: #F8FAFC;
+    color: #0F172A;
+    --scrollbar-thumb: #CBD5E1;
+    --scrollbar-track: #F1F5F9;
+  }
+
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   }
+
   *::-webkit-scrollbar { width: 6px; height: 6px; }
   *::-webkit-scrollbar-track { background: var(--scrollbar-track); }
-  *::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
-  
-  /* Custom range slider */
+  *::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+
+  /* Accessibility & focus ring */
+  *:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #6366F1, 0 0 0 4px rgba(99, 102, 241, 0.25);
+  }
+
+  /* Respect prefers-reduced-motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Range sliders */
   input[type='range'] {
     @apply w-full h-1.5 rounded-full appearance-none cursor-pointer;
-    background: linear-gradient(to right, #6c47ff 0%, #6c47ff var(--val, 50%), #2a2a45 var(--val, 50%), #2a2a45 100%);
+    background: linear-gradient(to right, #6366F1 0%, #6366F1 var(--val, 50%), rgba(255, 255, 255, 0.1) var(--val, 50%), rgba(255, 255, 255, 0.1) 100%);
   }
   input[type='range']::-webkit-slider-thumb {
-    @apply appearance-none w-4 h-4 rounded-full bg-brand-500 shadow-lg cursor-pointer;
-    box-shadow: 0 0 0 3px rgba(108,71,255,0.25);
+    @apply appearance-none w-4 h-4 rounded-full bg-indigo-500 shadow-md cursor-pointer;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3);
   }
 }
