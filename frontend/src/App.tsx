@@ -6,6 +6,7 @@ import AppLayout from './layouts/AppLayout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Dashboard from './pages/Dashboard'
 import TextToSpeech from './pages/TextToSpeech'
+import VoiceLibrary from './pages/VoiceLibrary'
 import PlaceholderPage from './pages/PlaceholderPage'
 import Profile from './pages/Profile'
 import NotFound from './pages/NotFound'
@@ -21,14 +22,14 @@ export default function App() {
       <AuthProvider>
         <ToastProvider>
           <Routes>
-            {/* Public auth pages */}
+            {/* Các trang đăng nhập / đăng ký công khai */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
 
-            {/* Protected Dashboard shell */}
+            {/* Layout chính được bảo vệ bởi ProtectedRoute */}
             <Route
               element={
                 <ProtectedRoute>
@@ -36,33 +37,28 @@ export default function App() {
                 </ProtectedRoute>
               }
             >
-              {/* Trang chính: Bảng điều khiển */}
+              {/* Trang chủ: Bảng điều khiển */}
               <Route path="/" element={<Dashboard />} />
               <Route path="/dashboard" element={<Dashboard />} />
 
-              {/* Trang Text to Speech (giữ nguyên đầy đủ tính năng tạo giọng) */}
+              {/* Studio Tạo giọng nói (Text to Speech 3 cột) */}
+              <Route path="/studio" element={<TextToSpeech />} />
               <Route path="/tts" element={<TextToSpeech />} />
               <Route path="/voice/tts" element={<TextToSpeech />} />
 
-              {/* Trang cá nhân */}
+              {/* Thư viện giọng đọc */}
+              <Route path="/voices" element={<VoiceLibrary />} />
+
+              {/* Hồ sơ người dùng */}
               <Route path="/profile" element={<Profile />} />
 
-              {/* Các trang placeholder cho các mục sidebar */}
-              <Route
-                path="/tools"
-                element={
-                  <PlaceholderPage
-                    title="Công cụ AI"
-                    subtitle="Kho công cụ AI đa năng xử lý âm thanh, văn bản và hình ảnh."
-                  />
-                }
-              />
+              {/* Các trang công cụ, lịch sử, mở rộng */}
               <Route
                 path="/history"
                 element={
                   <PlaceholderPage
                     title="Lịch Sử Xử Lý"
-                    subtitle="Quản lý và tải lại toàn bộ các đoạn âm thanh và video bạn đã tạo."
+                    subtitle="Quản lý và tải lại toàn bộ các đoạn âm thanh và video bạn đã tạo trong các phiên trước."
                   />
                 }
               />
@@ -70,8 +66,8 @@ export default function App() {
                 path="/pricing"
                 element={
                   <PlaceholderPage
-                    title="Nâng Cấp Gói & Nạp Credit"
-                    subtitle="Chọn gói linh hoạt phù hợp với nhu cầu sáng tạo không giới hạn của bạn."
+                    title="Gói Cước & Nạp Credit"
+                    subtitle="Lựa chọn các gói cước linh hoạt phù hợp với nhu cầu sáng tạo không giới hạn của bạn."
                   />
                 }
               />
@@ -79,8 +75,8 @@ export default function App() {
                 path="/affiliate"
                 element={
                   <PlaceholderPage
-                    title="Chương Trình Affiliate (25%)"
-                    subtitle="Giới thiệu Voxify tới cộng đồng và nhận 25% hoa hồng trọn đời."
+                    title="Giới Thiệu Bạn Bè (Affiliate 25%)"
+                    subtitle="Chia sẻ Voxify tới đồng nghiệp & cộng đồng để nhận ngay 25% hoa hồng trọn đời."
                   />
                 }
               />
@@ -89,12 +85,12 @@ export default function App() {
                 element={
                   <PlaceholderPage
                     title="API & Developers"
-                    subtitle="Tích hợp API giọng đọc AI tiếng Việt chất lượng cao vào ứng dụng của bạn."
+                    subtitle="Tích hợp API giọng đọc AI tiếng Việt chất lượng cao vào website và ứng dụng của bạn."
                   />
                 }
               />
 
-              {/* 404 bên trong layout */}
+              {/* Trang 404 */}
               <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>
