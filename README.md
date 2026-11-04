@@ -1,289 +1,239 @@
-# Text-to-Speech Studio (Phase 1 – MVP)
+# Voxify — Vietnamese Text-to-Speech Studio
 
-Hệ thống chuyển đổi văn bản thành giọng nói (Text-to-Speech) chất lượng cao, ưu tiên tiếng Việt tự nhiên, được thiết kế theo kiến trúc module hóa linh hoạt (dễ dàng mở rộng hỗ trợ Azure, ElevenLabs, Vbee,...).
+Nền tảng chuyển đổi văn bản thành giọng nói ưu tiên tiếng Việt, lấy cảm hứng từ YupVox / ElevenLabs / Vbee Studio.
 
-> **Lưu ý cấu hình thương hiệu:** Tên ứng dụng được quản lý động qua biến `APP_NAME` trong file `.env` (không hardcode trong mã nguồn).
+## Stack
+
+| Layer | Công nghệ |
+|-------|-----------|
+| Backend | Python 3.11, FastAPI, SQLAlchemy 2.0 + Alembic, Pydantic v2 |
+| TTS Engine | `edge-tts` (Microsoft Edge TTS — miễn phí, dùng để test) |
+| Database | SQLite (dev) / PostgreSQL (prod) |
+| Frontend | Vite + React 18 + TypeScript + Tailwind CSS |
+| Storage | Local filesystem (dev) / S3-compatible (prod) |
+| Queue | Redis + ARQ _(Phase 2)_ |
 
 ---
 
-## 🚀 Công nghệ sử dụng (Tech Stack)
+## Cấu trúc thư mục
 
-- **Backend:** Python 3.11+, FastAPI, Uvicorn, Pydantic v2
-- **Engine TTS:** `edge-tts` (Dịch vụ Microsoft Edge Speech, hoàn toàn miễn phí cho thử nghiệm)
-- **Frontend:** Single-page HTML5, CSS3, JavaScript thuần (ES6+, Dark Mode ElevenLabs / YupVox style, không dùng framework, không build step)
-- **Cấu hình:** `python-dotenv`, `pydantic-settings`
-
----
-
-## 📁 Cấu trúc thư mục
-
-```text
-├── app/
-│   ├── __init__.py
-│   ├── main.py              # Điểm khởi chạy FastAPI, middleware, static files mount
-│   ├── config.py            # Quản lý cấu hình Settings từ file .env
-│   ├── dependencies.py      # Dependency injection cho FastAPI
-│   ├── providers/
-│   │   ├── __init__.py      # Factory get_provider()
-│   │   ├── base.py          # Interface TTSProvider trừu tượng
-│   │   └── edge.py          # Hiện thực EdgeTTSProvider
-│   ├── services/
-│   │   ├── __init__.py
-│   │   ├── text_splitter.py # Thuật toán chia câu thông minh (~2.500 ký tự)
-│   │   └── tts_service.py   # Quản lý cache giọng đọc, validate, ghép nối MP3
-│   └── routes/
-│       ├── __init__.py
-│       ├── config.py        # GET /api/config
-│       ├── voices.py        # GET /api/voices
-│       └── tts.py           # POST /api/tts
-├── static/
-│   ├── index.html           # Giao diện Dark mode responsive 1 trang
-│   ├── style.css            # Thiết kế giao diện hiện đại
-│   └── app.js               # Logic tương tác, audio player, lịch sử phiên
-├── tests/
-│   └── test_tts.py          # Bộ kiểm thử tự động pytest
-├── requirements.txt         # Danh sách thư viện Python
-├── Dockerfile               # Cấu hình build Docker image multi-stage
-├── docker-compose.yml       # Cấu hình Docker Compose chạy service
-├── entrypoint.sh            # Script khởi tạo container
-├── .dockerignore            # Loại bỏ các file không cần thiết khi build Docker
-├── .env.example             # Mẫu file cấu hình môi trường
-└── README.md                # Tài liệu hướng dẫn
+```
+Voxify/
+├── backend/                  # FastAPI app
+│   ├── app/
+│   │   ├── main.py           # FastAPI entry point
+│   │   ├── config.py         # Settings từ .env
+│   │   ├── db.py             # SQLAlchemy async engine
+│   │   ├── models/           # User, Generation, CreditTransaction
+│   │   ├── schemas/          # Pydantic request/response schemas
+│   │   ├── routes/           # /api/config, /api/voices, /api/tts
+│   │   ├── services/         # TTSService, StorageService, TextSplitter
+│   │   ├── providers/        # TTSProvider interface + EdgeTTSProvider + ProviderRegistry
+│   │   ├── storage/          # StorageBackend interface + LocalStorage
+│   │   └── core/             # Errors, Logging
+│   ├── alembic/              # Database migrations
+│   ├── tests/                # pytest tests
+│   ├── requirements.txt
+│   ├── Dockerfile
+│   └── .env.example
+├── frontend/                 # Vite + React + TS + Tailwind
+│   ├── src/
+│   │   ├── pages/            # TextToSpeech.tsx
+│   │   ├── components/       # VoiceSelector, AudioPlayer, SliderControl...
+│   │   ├── hooks/            # useVoices, useTTS, useAppConfig, useToast
+│   │   ├── api/              # client.ts, tts.ts, config.ts
+│   │   └── layouts/          # AppLayout.tsx
+│   ├── vite.config.ts
+│   └── package.json
+├── storage/                  # Audio files + SQLite DB (gitignored)
+├── docker-compose.yml        # Dev environment
+└── README.md
 ```
 
 ---
 
-## ⚙️ Cài đặt & Khởi chạy
+## Cài đặt & Chạy
 
-### Cách 1: Chạy bằng Docker & Docker Compose (Khuyên dùng)
+### Yêu cầu
+- Docker & Docker Compose v2+
+- **hoặc** Python 3.11+ và Node 20+ (nếu chạy local)
+
+### Cách 1 — Docker Compose (khuyến nghị)
 
 ```bash
-# 1. Sao chép file cấu hình
-cp .env.example .env
+# 1. Clone repo
+git clone https://github.com/caoviethoang/Voxify.git
+cd Voxify
 
-# 2. Khởi động ứng dụng bằng Docker Compose
-docker compose up --build -d
+# 2. Tạo file .env từ example
+cp backend/.env.example backend/.env
+# (Chỉnh sửa SECRET_KEY và các giá trị cần thiết)
 
-# 3. Xem logs hoạt động
-docker compose logs -f
+# 3. Khởi động backend + frontend
+docker compose up
 
-# 4. Dừng container khi không sử dụng
-docker compose down
+# Frontend: http://localhost:5173
+# Backend API: http://localhost:8000
+# API Docs: http://localhost:8000/docs
 ```
 
-Ứng dụng sẽ tự động chạy tại [http://localhost:8000](http://localhost:8000). Thư mục `./app` và `./static` được mount trực tiếp vào container giúp cập nhật code tức thì (hot-reload).
+**Với PostgreSQL (tùy chọn):**
+```bash
+docker compose --profile postgres up
+# Và đổi DATABASE_URL trong backend/.env:
+# DATABASE_URL=postgresql+asyncpg://voxify:voxify_dev_pass@db:5432/voxify
+```
+
+**Với Redis (tùy chọn — cần cho Phase 2+):**
+```bash
+docker compose --profile redis up
+```
 
 ---
 
-### Cách 2: Chạy trực tiếp trên máy chủ cục bộ (Local Python)
+### Cách 2 — Local development
 
-#### 1. Yêu cầu môi trường
-- Python 3.11 trở lên
-- Git
-
-#### 2. Thiết lập môi trường ảo & cài đặt thư viện
-
+#### Backend
 ```bash
-# Tạo môi trường ảo
-python3 -m venv .venv
+cd backend
 
-# Kích hoạt môi trường ảo
-# Trên Linux/macOS:
+# Tạo virtual environment
+python3.11 -m venv .venv
 source .venv/bin/activate
-# Trên Windows:
-# .venv\Scripts\activate
 
-# Cài đặt các gói phụ thuộc
+# Cài dependencies
 pip install -r requirements.txt
-```
 
-### 3. Cấu hình file `.env`
-
-Sao chép từ file mẫu `.env.example`:
-
-```bash
+# Cấu hình
 cp .env.example .env
-```
 
-Nội dung `.env`:
-```env
-APP_NAME=Voxify
-APP_DESCRIPTION=Nền tảng chuyển đổi văn bản thành giọng nói tiếng Việt chất lượng cao
-HOST=0.0.0.0
-PORT=8000
-MAX_TEXT_LENGTH=20000
-CHUNK_SIZE=2500
-DEFAULT_VOICE=vi-VN-HoaiMyNeural
-```
+# Tạo thư mục storage
+mkdir -p storage/audio
 
-### 4. Khởi động Web App
+# Chạy database migration
+alembic upgrade head
 
-```bash
+# Khởi động server
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+# API: http://localhost:8000
+# Docs: http://localhost:8000/docs
 ```
 
-Truy cập trình duyệt tại:
-- **Giao diện Web:** [http://localhost:8000](http://localhost:8000)
-- **Tài liệu API Swagger:** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Tài liệu ReDoc:** [http://localhost:8000/redoc](http://localhost:8000/redoc)
-
----
-
-## 📡 Chi tiết API Endpoints
-
-### 1. `GET /api/config`
-Lấy thông tin cấu hình ứng dụng (tên app, giới hạn ký tự, giọng mặc định).
-- **Response:**
-  ```json
-  {
-    "app_name": "Voxify",
-    "app_description": "Nền tảng chuyển đổi văn bản thành giọng nói tiếng Việt chất lượng cao",
-    "max_text_length": 20000,
-    "chunk_size": 2500,
-    "default_voice": "vi-VN-HoaiMyNeural"
-  }
-  ```
-
-### 2. `GET /api/voices`
-Lấy danh sách hơn 300 giọng đọc, cache trong bộ nhớ, **ưu tiên giọng tiếng Việt (`vi-VN`) lên đầu**.
-- **Query params:** `refresh=true` (tùy chọn làm mới cache)
-- **Response:**
-  ```json
-  {
-    "total": 322,
-    "vietnamese_count": 2,
-    "voices": [
-      {
-        "id": "vi-VN-HoaiMyNeural",
-        "name": "HoaiMy",
-        "full_name": "Microsoft HoaiMy Online (Natural) - Vietnamese (Vietnam)",
-        "gender": "Female",
-        "locale": "vi-VN",
-        "locale_name": "Vietnamese (Vietnam)",
-        "is_vietnamese": true
-      },
-      {
-        "id": "vi-VN-NamMinhNeural",
-        "name": "NamMinh",
-        "gender": "Male",
-        "locale": "vi-VN",
-        "is_vietnamese": true
-      }
-    ]
-  }
-  ```
-
-### 3. `POST /api/tts`
-Tạo file âm thanh MP3 từ văn bản.
-- **Request Body:**
-  ```json
-  {
-    "text": "Chào bạn, đây là thử nghiệm giọng đọc tự nhiên.",
-    "voice": "vi-VN-HoaiMyNeural",
-    "rate": "+0%",
-    "pitch": "+0Hz",
-    "volume": "+0%",
-    "preview": false
-  }
-  ```
-- **Xử lý đặc biệt:**
-  - `preview=true`: chỉ đọc 200 ký tự đầu tiên để nghe thử nhanh.
-  - Text > 2.500 ký tự: tự động cắt theo câu văn hoàn chỉnh và ghép nối audio liền mạch.
-  - Text > 20.000 ký tự: trả về mã lỗi HTTP 400 kèm thông báo tiếng Việt cụ thể.
-- **Response:** `Content-Type: audio/mpeg` (dữ liệu file MP3 nhị phân).
-
----
-
-## 🧪 Kiểm thử (Testing)
-
-### Kiểm thử tự động (Pytest)
-
-Chạy bộ kiểm thử tự động toàn diện:
+#### Frontend
 ```bash
-pytest tests/test_tts.py -v
+cd frontend
+
+# Cài dependencies
+npm install
+
+# Khởi động Vite dev server (proxy /api → localhost:8000)
+npm run dev
+# UI: http://localhost:5173
 ```
 
-Bộ test bao gồm:
-1. `test_text_splitter_short_text`: Tách văn bản ngắn
-2. `test_text_splitter_empty_text`: Kiểm tra chuỗi rỗng
-3. `test_text_splitter_long_text`: Tách văn bản dài (>3000 ký tự) không làm đứt gãy câu
-4. `test_get_config`: Xác thực endpoint `/api/config`
-5. `test_get_voices`: Xác thực endpoint `/api/voices` ưu tiên tiếng Việt
-6. `test_tts_empty_text`: Validate lỗi văn bản rỗng
-7. `test_tts_exceed_max_length`: Validate lỗi văn bản > 20.000 ký tự
-8. `test_tts_service_preview_and_split`: Kiểm thử logic tầng service với Mock Provider
-9. `test_api_tts_preview_post`: Kiểm thử gọi API `/api/tts`
-10. `test_edge_tts_synthesize_real`: Kiểm thử kết nối và tạo âm thanh thực tế từ Edge-TTS
+---
 
-### Hướng dẫn kiểm thử thủ công qua Web
+## Database Migrations (Alembic)
 
-1. **Mở trình duyệt:** Truy cập `http://localhost:8000`.
-2. **Kiểm tra tên thương hiệu:** Tiêu đề trang và logo hiển thị theo `APP_NAME` đặt trong file `.env`.
-3. **Thử văn bản mẫu:** Bấm nút **"Văn bản mẫu"** ở góc phải khung nhập liệu để tự động điền đoạn văn tiếng Việt.
-4. **Kiểm tra bộ đếm ký tự:** Gõ hoặc xóa văn bản, quan sát bộ đếm ký tự và dòng trạng thái phân đoạn (ví dụ: `1 đoạn (210 ký tự)` hoặc `Dài: ~3 đoạn ghép tự động`).
-5. **Chọn giọng đọc:**
-   - Xem 2 giọng tiếng Việt `HoaiMy` (Nữ) và `NamMinh` (Nam) hiển thị đầu danh sách với huy hiệu màu vàng "Tiếng Việt".
-   - Dùng ô tìm kiếm để gõ thử tên giọng hoặc ngôn ngữ khác.
-   - Thử các tab lọc "Tiếng Việt", "Tất cả", "Nữ", "Nam".
-6. **Điều chỉnh thông số âm thanh:**
-   - Kéo thanh **Tốc độ đọc (Speed)** từ `0.5x` đến `2.0x`.
-   - Kéo thanh **Cao độ (Pitch)** và **Âm lượng (Volume)**.
-   - Bấm **"Đặt lại"** để đưa các giá trị về chuẩn (1.0x, 0Hz, 0%).
-7. **Bấm "Nghe thử (200 ký tự)":**
-   - Nút chuyển sang trạng thái loading.
-   - Trình phát nhạc tự động bật lên và phát 200 ký tự đầu.
-8. **Bấm "Tạo giọng nói":**
-   - Tạo toàn bộ nội dung văn bản.
-   - Bấm nút **"Tải MP3"** để tải file về máy.
-9. **Kiểm tra Lịch sử phiên làm việc:**
-   - Cuộn xuống phần **Lịch sử phiên làm việc**, các lần tạo trước đó đều hiển thị dạng thẻ.
-   - Bấm **"Phát"** để nghe lại đoạn âm thanh cũ hoặc bấm biểu tượng tải về.
-   - Bấm **"Xóa toàn bộ lịch sử"** để xóa các bản ghi trong phiên.
+```bash
+cd backend
+
+# Áp dụng migration mới nhất
+alembic upgrade head
+
+# Tạo migration mới (sau khi thay đổi models)
+alembic revision --autogenerate -m "mô tả thay đổi"
+
+# Xem lịch sử migration
+alembic history
+
+# Rollback 1 bước
+alembic downgrade -1
+```
 
 ---
 
-## 🔌 Khả năng mở rộng (Extensibility)
+## API Endpoints
 
-Để tích hợp thêm nhà cung cấp giọng đọc mới (Azure, ElevenLabs, Vbee,...) mà **không cần sửa mã nguồn route**:
+| Method | Endpoint | Mô tả |
+|--------|----------|-------|
+| `GET` | `/health` | Health check |
+| `GET` | `/api/config` | Cấu hình frontend (app_name, max_chars...) |
+| `GET` | `/api/voices` | Danh sách giọng đọc (tiếng Việt ưu tiên đầu) |
+| `POST` | `/api/tts` | Tổng hợp giọng nói → trả file MP3 |
+| `GET` | `/docs` | Swagger UI |
 
-1. Tạo file hiện thực mới trong `app/providers/`, kế thừa `TTSProvider`:
-   ```python
-   from app.providers.base import TTSProvider
+### POST /api/tts
 
-   class ElevenLabsProvider(TTSProvider):
-       @property
-       def provider_name(self) -> str:
-           return "elevenlabs"
-
-       async def list_voices(self) -> list[dict]:
-           # Gọi API ElevenLabs
-           ...
-
-       async def synthesize(self, text, voice, rate="+0%", pitch="+0Hz", volume="+0%") -> bytes:
-           # Gọi API ElevenLabs
-           ...
-   ```
-2. Đăng ký provider mới trong `app/providers/__init__.py`:
-   ```python
-   _PROVIDERS = {
-       "edge": EdgeTTSProvider,
-       "elevenlabs": ElevenLabsProvider,
-   }
-   ```
-3. Cấu hình provider mong muốn trong `app/dependencies.py` hoặc qua biến `TTS_PROVIDER=elevenlabs` trong `.env`.
+```json
+{
+  "text": "Nội dung văn bản cần đọc (tối đa 20.000 ký tự)",
+  "voice": "vi-VN-HoaiMyNeural",
+  "rate": "+0%",
+  "pitch": "+0Hz",
+  "volume": "+0%",
+  "preview": false
+}
+```
 
 ---
 
-## 📌 Lộ trình phát triển các giai đoạn tiếp theo (Roadmap)
+## Kiểm thử
 
-### Phase 2 (Khi có yêu cầu)
-- Xuất phụ đề SRT/VTT theo câu (sử dụng word/sentence boundary của engine).
-- Từ điển phát âm tùy chỉnh (thay thế từ viết tắt, tên riêng, số, ngày tháng trước khi đọc).
-- Chèn khoảng ngắt (nghỉ) giữa các câu (cú pháp `[pause 1s]`).
-- Tạo hàng loạt từ file `.txt`, tải về file nén `.zip`.
-- Lưu trữ lịch sử vào SQLite (SQLAlchemy) và tệp audio vào thư mục `/storage`.
+```bash
+cd backend
+source .venv/bin/activate
 
-### Phase 3 (Thương mại hóa)
-- Đăng nhập người dùng, hệ thống tính credit theo số ký tự, quản lý API key.
-- Rate limiting, hàng đợi tác vụ nền (Background Queue / Celery / Redis).
-- Cổng thanh toán trực tuyến, trang quản trị (Admin Dashboard).
+# Chạy toàn bộ test suite
+PYTHONPATH=. pytest tests/ -v
+
+# Chạy một test cụ thể
+PYTHONPATH=. pytest tests/test_tts.py::test_split_text -v
+```
+
+---
+
+## Cấu hình .env (backend)
+
+| Biến | Mặc định | Mô tả |
+|------|----------|-------|
+| `APP_NAME` | `TTS Studio` | Tên hiển thị (không hardcode trong code) |
+| `SECRET_KEY` | _(bắt buộc đổi)_ | JWT secret cho Phase 3 |
+| `DATABASE_URL` | SQLite | Kết nối DB |
+| `REDIS_URL` | localhost:6379 | Kết nối Redis |
+| `STORAGE_PATH` | `./storage/audio` | Thư mục lưu file audio |
+| `TTS_PROVIDER` | `edge` | Provider TTS (`edge` / `azure` / `elevenlabs`) |
+| `DEFAULT_VOICE` | `vi-VN-HoaiMyNeural` | Giọng mặc định |
+| `MAX_CHARS` | `20000` | Giới hạn ký tự mỗi request |
+
+---
+
+## Thêm TTS Provider mới
+
+Implement interface `TTSProvider` trong `backend/app/providers/`:
+
+```python
+# backend/app/providers/azure.py
+from app.providers.base import TTSProvider
+
+class AzureTTSProvider(TTSProvider):
+    async def list_voices(self): ...
+    async def synthesize(self, text, voice, rate, pitch, volume) -> bytes: ...
+```
+
+Đăng ký vào `ProviderRegistry`:
+```python
+# backend/app/providers/__init__.py
+from app.providers.azure import AzureTTSProvider
+ProviderRegistry.register("azure", AzureTTSProvider)
+```
+
+Đổi trong `.env`: `TTS_PROVIDER=azure`
+
+---
+
+## Roadmap
+
+- **Phase 1** ✅ MVP: TTS cơ bản, chọn giọng, sliders, lịch sử phiên
+- **Phase 2** 🔲 Xuất SRT/VTT, từ điển phát âm, batch processing, lịch sử DB
+- **Phase 3** 🔲 Auth, credit system, rate limiting, payments, admin dashboard

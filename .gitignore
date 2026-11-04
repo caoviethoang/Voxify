@@ -15,10 +15,18 @@ ENV/
 
 # Configuration
 .env
+*.local
+
+# Node / Frontend
+node_modules/
+dist/
+dist-ssr/
 
 # Storage and temp
 storage/
 temp/
+*.sqlite
+*.db
 *.mp3
 *.wav
 *.zip

@@ -1,22 +1,25 @@
 services:
-  web:
+  # ── Backend FastAPI ──────────────────────────────────────────
+  backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
-    container_name: voxify_app
+    container_name: voxify_backend
     env_file:
-      - path: .env
+      - path: ./backend/.env
         required: false
     environment:
       - APP_NAME=${APP_NAME:-Voxify}
       - HOST=0.0.0.0
       - PORT=8000
       - PYTHONUNBUFFERED=1
+      - DATABASE_URL=sqlite+aiosqlite:///./storage/db.sqlite
+      - STORAGE_PATH=./storage/audio
     ports:
-      - "${PORT:-8000}:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     volumes:
-      - ./app:/app/app
-      - ./static:/app/static
+      - ./backend/app:/app/app         # hot-reload code
+      - ./storage:/app/storage         # audio files + sqlite db
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     restart: unless-stopped
     healthcheck:
@@ -24,4 +27,61 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-      start_period: 5s
+      start_period: 10s
+
+  # ── Frontend Vite Dev Server ─────────────────────────────────
+  frontend:
+    image: node:20-alpine
+    container_name: voxify_frontend
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules        # anonymous volume để node_modules không bị overwrite
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    command: sh -c "npm install --silent && npm run dev -- --host 0.0.0.0 --port 5173"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # ── PostgreSQL (tùy chọn — chỉ dùng khi DATABASE_URL trỏ tới postgres) ──
+  db:
+    image: postgres:16-alpine
+    container_name: voxify_db
+    profiles: ["postgres"]           # docker compose --profile postgres up
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-voxify}
+      POSTGRES_USER: ${POSTGRES_USER:-voxify}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-voxify_dev_pass}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-voxify}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis (tùy chọn — dùng cho hàng đợi Phase 2+) ───────────
+  redis:
+    image: redis:7-alpine
+    container_name: voxify_redis
+    profiles: ["redis"]              # docker compose --profile redis up
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:
