@@ -103,6 +103,7 @@ async def login(
 
 @router.post("/google", response_model=TokenResponse, summary="Đăng nhập / Đăng ký qua Google OAuth")
 async def google_login(
+    request: Request,
     response: Response,
     data: GoogleAuthRequest,
     db: AsyncSession = Depends(get_db),
