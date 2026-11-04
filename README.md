@@ -197,7 +197,7 @@ PYTHONPATH=. pytest tests/test_tts.py::test_split_text -v
 
 | Biến | Mặc định | Mô tả |
 |------|----------|-------|
-| `APP_NAME` | `TTS Studio` | Tên hiển thị (không hardcode trong code) |
+| `APP_NAME` | `Voxify` | Tên hiển thị (không hardcode trong code) |
 | `SECRET_KEY` | _(bắt buộc đổi)_ | JWT secret cho Phase 3 |
 | `DATABASE_URL` | SQLite | Kết nối DB |
 | `REDIS_URL` | localhost:6379 | Kết nối Redis |

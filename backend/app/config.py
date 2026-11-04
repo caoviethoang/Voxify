@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # Thông tin ứng dụng
-    app_name: str = "TTS Studio"
+    app_name: str = "Voxify"
     app_description: str = "Nền tảng chuyển đổi văn bản thành giọng nói"
 
     # Máy chủ

@@ -8,7 +8,7 @@
 
   // Biến trạng thái ứng dụng
   const state = {
-    appName: "TTS Studio",
+    appName: "Voxify",
     maxTextLength: 20000,
     chunkSize: 2500,
     defaultVoice: "vi-VN-HoaiMyNeural",
