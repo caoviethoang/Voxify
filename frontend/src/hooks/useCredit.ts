@@ -15,8 +15,10 @@ export function useCredit() {
   const [historyData, setHistoryData] = useState<CreditTransactionsResponse | null>(null)
   const [isHistoryLoading, setIsHistoryLoading] = useState(false)
 
+  const userId = user?.id
+
   const refreshCredits = useCallback(async () => {
-    if (!user) return
+    if (!userId) return
     setIsLoading(true)
     try {
       const res = await fetchCredits()
@@ -28,7 +30,7 @@ export function useCredit() {
     } finally {
       setIsLoading(false)
     }
-  }, [user, updateCredits])
+  }, [userId, updateCredits])
 
   const loadTransactions = useCallback(
     async (params?: { page?: number; limit?: number; type?: string }) => {
@@ -45,10 +47,10 @@ export function useCredit() {
   )
 
   useEffect(() => {
-    if (user) {
+    if (userId) {
       refreshCredits()
     }
-  }, [user, refreshCredits])
+  }, [userId, refreshCredits])
 
   return {
     balance: user?.credits ?? data?.balance ?? 0,
