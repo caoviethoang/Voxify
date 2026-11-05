@@ -81,7 +81,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   const updateCredits = useCallback((newCredits: number) => {
-    setUser((prev) => (prev ? { ...prev, credits: newCredits, credit_balance: newCredits } : null))
+    setUser((prev) => {
+      if (!prev) return null
+      if (prev.credits === newCredits) return prev
+      return { ...prev, credits: newCredits }
+    })
   }, [])
 
   return (
