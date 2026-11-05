@@ -13,3 +13,4 @@ class DashboardStatsResponse(BaseModel):
     recent_activities: List[HistoryItemResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+

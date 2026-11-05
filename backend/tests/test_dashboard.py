@@ -79,3 +79,4 @@ async def test_dashboard_stats():
         assert len(data["recent_activities"]) == 2
         assert data["latest_generation"] is not None
         assert "Đoạn văn bản" in data["latest_generation"]["text"]
+

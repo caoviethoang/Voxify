@@ -88,3 +88,4 @@ async def get_dashboard_stats(
         latest_generation=latest_item,
         recent_activities=recent_items,
     )
+
