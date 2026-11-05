@@ -149,11 +149,13 @@ export default function TextToSpeech() {
   const selectedVoiceName = selectedVoice?.name ?? selectedVoiceId
 
   const location = useLocation()
+  const appliedJobIdRef = useRef<number | null>(null)
 
   // Khôi phục văn bản và cài đặt khi người dùng bấm "Mở lại" từ trang Lịch sử xử lý
   useEffect(() => {
     const job = (location.state as { reopenJob?: TTSJob })?.reopenJob
-    if (job) {
+    if (job && appliedJobIdRef.current !== job.id) {
+      appliedJobIdRef.current = job.id
       if (job.text) setText(job.text)
       if (job.voice) setSelectedVoiceId(job.voice)
       if (job.rate) {
@@ -181,7 +183,6 @@ export default function TextToSpeech() {
         if (job.vtt_url) setReplayVttUrl(job.vtt_url)
       }
       toast.info('Đã nạp lại văn bản và cài đặt từ lịch sử xử lý.')
-      window.history.replaceState({}, '', window.location.pathname)
     }
   }, [location.state, voices, toast])
 
