@@ -92,15 +92,6 @@ export default function AudioPlayer({
     setCurrentTime(0)
   }
 
-  const handleDownloadFile = (fileUrl: string, filename: string) => {
-    const a = document.createElement('a')
-    a.href = fileUrl
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-  }
-
   return (
     <div className="bg-white dark:bg-[#12151C] border border-indigo-200/80 dark:border-indigo-500/20 rounded-card p-4 shadow-sm flex flex-col gap-3 transition-all">
       <audio
@@ -129,34 +120,47 @@ export default function AudioPlayer({
         {/* Action Buttons: Subtitles + Download */}
         <div className="flex items-center gap-1.5">
           {srtUrl && (
-            <button
-              onClick={() => handleDownloadFile(srtUrl, `voxify_${Date.now()}.srt`)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-control bg-slate-100 hover:bg-slate-200 dark:bg-[#181C25] dark:hover:bg-[#202532] text-[11px] font-semibold text-slate-700 dark:text-white/80 border border-slate-200 dark:border-white/[0.08] transition-colors"
+            <a
+              href={srtUrl}
+              download={`voxify_${Date.now()}.srt`}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-control bg-slate-100 hover:bg-slate-200 dark:bg-[#181C25] dark:hover:bg-[#202532] text-[11px] font-semibold text-slate-700 dark:text-white/80 border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer"
               title="Tải phụ đề khớp thời gian chuẩn SRT"
             >
               <FileText className="w-3 h-3 text-indigo-500" />
               <span>SRT</span>
-            </button>
+            </a>
           )}
 
           {vttUrl && (
-            <button
-              onClick={() => handleDownloadFile(vttUrl, `voxify_${Date.now()}.vtt`)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-control bg-slate-100 hover:bg-slate-200 dark:bg-[#181C25] dark:hover:bg-[#202532] text-[11px] font-semibold text-slate-700 dark:text-white/80 border border-slate-200 dark:border-white/[0.08] transition-colors"
+            <a
+              href={vttUrl}
+              download={`voxify_${Date.now()}.vtt`}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-control bg-slate-100 hover:bg-slate-200 dark:bg-[#181C25] dark:hover:bg-[#202532] text-[11px] font-semibold text-slate-700 dark:text-white/80 border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer"
               title="Tải phụ đề chuẩn WebVTT"
             >
               <FileText className="w-3 h-3 text-purple-500" />
               <span>VTT</span>
-            </button>
+            </a>
           )}
 
-          <button
-            onClick={onDownload || (() => handleDownloadFile(url, `voxify_${Date.now()}.${format}`))}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-control bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-[11px] font-bold text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30 transition-colors shadow-xs"
-          >
-            <Download className="w-3 h-3" />
-            <span>Tải {format.toUpperCase()}</span>
-          </button>
+          {onDownload ? (
+            <button
+              onClick={onDownload}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-control bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-[11px] font-bold text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30 transition-colors shadow-xs"
+            >
+              <Download className="w-3 h-3" />
+              <span>Tải {format.toUpperCase()}</span>
+            </button>
+          ) : (
+            <a
+              href={url}
+              download={`voxify_${Date.now()}.${format}`}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-control bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-[11px] font-bold text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30 transition-colors shadow-xs cursor-pointer"
+            >
+              <Download className="w-3 h-3" />
+              <span>Tải {format.toUpperCase()}</span>
+            </a>
+          )}
         </div>
       </div>
 

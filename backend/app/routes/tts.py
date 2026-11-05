@@ -1,6 +1,8 @@
 """Route /api/tts — tổng hợp giọng nói đồng bộ, background jobs, trừ/hoàn credit và phụ đề."""
 import logging
 import os
+from datetime import datetime
+from pathlib import Path
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse
@@ -169,12 +171,35 @@ async def get_job_subtitles(
 ):
     """Tải file phụ đề đồng bộ mốc thời gian (SRT hoặc WebVTT)."""
     job = await _job_service.get_job(db, job_id)
-    if not job or job.status != "done":
-        raise HTTPException(status_code=404, detail="Phụ đề chưa được tạo hoặc job chưa hoàn tất.")
+    if not job:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bản ghi âm thanh.")
 
     sub_path = job.vtt_path if format == "vtt" else job.srt_path
+
+    # Nếu file phụ đề chưa có trên đĩa, tự động ước lượng và tạo từ văn bản & thời lượng
     if not sub_path or not os.path.exists(sub_path):
-        raise HTTPException(status_code=404, detail=f"Không tìm thấy file phụ đề định dạng {format.upper()}.")
+        duration = job.duration
+        if duration <= 0 and job.file_path and os.path.exists(job.file_path):
+            duration = AudioService.measure_duration(job.file_path)
+            job.duration = duration
+        if duration <= 0:
+            duration = max(1.0, len(job.text) / 12.0)
+
+        Path("storage/audio").mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        srt_path = str(Path("storage/audio") / f"subtitles_job_{job.id}_{timestamp}.srt")
+        vtt_path = str(Path("storage/audio") / f"subtitles_job_{job.id}_{timestamp}.vtt")
+
+        AudioService.generate_estimated_subtitles(
+            text=job.text,
+            total_duration=duration,
+            srt_path=srt_path,
+            vtt_path=vtt_path,
+        )
+        job.srt_path = srt_path
+        job.vtt_path = vtt_path
+        await db.commit()
+        sub_path = vtt_path if format == "vtt" else srt_path
 
     media_type = "text/vtt" if format == "vtt" else "application/x-subrip"
     filename = f"subtitles_{job.id}.{format}"

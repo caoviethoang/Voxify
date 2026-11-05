@@ -134,6 +134,51 @@ class AudioService:
         return output_path
 
     @staticmethod
+    def generate_estimated_subtitles(
+        text: str,
+        total_duration: float,
+        srt_path: str,
+        vtt_path: str,
+    ) -> Tuple[str, str]:
+        """
+        Ước lượng mốc thời gian phụ đề từ văn bản và tổng thời lượng âm thanh,
+        chia theo câu/mệnh đề để tạo file SRT và WebVTT.
+        """
+        import re
+        clean_text = text.strip()
+        if not clean_text:
+            clean_text = "..."
+
+        # Tách theo câu (. ! ? … \n)
+        raw_sentences = re.split(r'(?<=[.!?…\n])\s+', clean_text)
+        sentences = [s.strip() for s in raw_sentences if s.strip()]
+        if not sentences:
+            sentences = [clean_text]
+
+        total_chars = sum(len(s) for s in sentences) or 1
+        safe_duration = max(0.5, total_duration)
+
+        segments: List[Dict[str, Any]] = []
+        current_time = 0.0
+
+        for idx, s in enumerate(sentences):
+            # Tỷ lệ thời gian theo số ký tự
+            proportion = len(s) / total_chars
+            seg_dur = max(0.3, proportion * safe_duration)
+            end_time = current_time + seg_dur
+            if idx == len(sentences) - 1:
+                end_time = max(end_time, safe_duration)
+
+            segments.append({
+                "text": s,
+                "start": current_time,
+                "end": end_time,
+            })
+            current_time = end_time
+
+        return AudioService.generate_subtitles(segments, srt_path, vtt_path)
+
+    @staticmethod
     def generate_subtitles(
         segments: List[Dict[str, Any]],
         srt_path: str,
