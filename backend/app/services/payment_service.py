@@ -176,22 +176,25 @@ class PaymentService:
 
     @classmethod
     async def seed_defaults_if_empty(cls, db: AsyncSession) -> None:
-        """Khởi tạo các gói cước và mã giảm giá mặc định nếu bảng đang rỗng."""
-        res = await db.execute(select(func.count(PricingPlan.id)))
-        if (res.scalar() or 0) == 0:
-            for item in DEFAULT_PLANS:
-                plan = PricingPlan(**item)
-                db.add(plan)
-            await db.commit()
-            logger.info("Đã khởi tạo các gói dịch vụ mặc định vào database.")
+        """Khởi tạo các gói cước và mã giảm giá mặc định nếu chưa tồn tại."""
+        changed = False
+        for item in DEFAULT_PLANS:
+            stmt = select(PricingPlan).where(PricingPlan.code == item["code"])
+            res = await db.execute(stmt)
+            if not res.scalar_one_or_none():
+                db.add(PricingPlan(**item))
+                changed = True
 
-        res_cp = await db.execute(select(func.count(Coupon.id)))
-        if (res_cp.scalar() or 0) == 0:
-            for cp_data in DEFAULT_COUPONS:
-                coupon = Coupon(**cp_data)
-                db.add(coupon)
+        for cp_data in DEFAULT_COUPONS:
+            stmt_cp = select(Coupon).where(Coupon.code == cp_data["code"])
+            res_cp = await db.execute(stmt_cp)
+            if not res_cp.scalar_one_or_none():
+                db.add(Coupon(**cp_data))
+                changed = True
+
+        if changed:
             await db.commit()
-            logger.info("Đã khởi tạo các mã giảm giá mặc định vào database.")
+            logger.info("Đã khởi tạo các gói dịch vụ và mã giảm giá mặc định.")
 
     # --- Quản lý Gói dịch vụ (Plans) ---
 
@@ -259,8 +262,10 @@ class PaymentService:
             return None, 0, "Mã giảm giá không tồn tại."
         if not coupon.is_active:
             return None, 0, "Mã giảm giá đã bị tạm ngừng áp dụng."
-        if coupon.expires_at and coupon.expires_at < datetime.now(UTC):
-            return None, 0, "Mã giảm giá đã hết hạn sử dụng."
+        if coupon.expires_at:
+            exp_at = coupon.expires_at if coupon.expires_at.tzinfo else coupon.expires_at.replace(tzinfo=UTC)
+            if exp_at < datetime.now(UTC):
+                return None, 0, "Mã giảm giá đã hết hạn sử dụng."
         if coupon.max_uses > 0 and coupon.used_count >= coupon.max_uses:
             return None, 0, "Mã giảm giá đã hết lượt sử dụng."
         if order_amount < coupon.min_order_amount:
@@ -319,8 +324,10 @@ class PaymentService:
         final_amount = max(0, original_amount - discount_amount)
 
         # Sinh mã đơn hàng độc nhất
-        now_ts = int(time.time())
-        order_number = (now_ts % 100000000) * 10 + (user.id % 10)  # Integer thích hợp cho PayOS
+        import random
+        now_ts = int(time.time() * 10)
+        rand_suffix = random.randint(10, 99)
+        order_number = (now_ts % 10000000) * 100 + rand_suffix  # Số nguyên cho PayOS
         order_code = f"VOX{order_number}"
         transfer_content = order_code
 

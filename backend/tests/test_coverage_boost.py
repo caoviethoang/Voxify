@@ -18,6 +18,7 @@ from app.services.audio_service import AudioService
 from app.services.auth_service import AuthService
 from app.services.credit_service import CreditService, CreditTransactionType, InsufficientCreditsError
 from app.services.dictionary_service import DictionaryService
+from app.services.payment_service import PaymentService
 from app.services.storage_service import StorageService
 from app.services.text_splitter import split_text_into_chunks
 from app.storage.local import LocalStorage
@@ -598,6 +599,15 @@ async def test_history_bulk_delete_and_filters():
         assert del_bulk.status_code == 200
         assert del_bulk.json()["deleted"] >= 1
 
+        # Các nhánh 404 của history
+        assert (await client.delete("/api/history/999999", headers=headers)).status_code == 404
+        assert (await client.get("/api/history/999999/download", headers=headers)).status_code == 404
+        assert (await client.get("/api/history/999999/subtitles", headers=headers)).status_code == 404
+
+        # Các nhánh 404 của dictionary
+        assert (await client.delete("/api/dictionary/999999", headers=headers)).status_code == 404
+        assert (await client.put("/api/dictionary/999999", headers=headers, json={"pattern": "test", "replacement": "test"})).status_code == 404
+
 
 @pytest.mark.unit
 def test_email_notifications():
@@ -814,10 +824,34 @@ async def test_auth_routes_extra():
         })
         assert res_reset.status_code == 200
 
+        # 2b. Reset password với token không hợp lệ -> 400
+        res_reset_bad = await client.post("/api/auth/reset-password", json={
+            "token": "invalid_jwt_token_format",
+            "new_password": "NewUpdatedPassword789!",
+        })
+        assert res_reset_bad.status_code == 400
+
         # 3. Verify email qua route
         vtok = create_timed_token({"sub": reset_email}, token_type="verify_email", expires_minutes=15)
         res_ver = await client.get(f"/api/auth/verify-email?token={vtok}")
         assert res_ver.status_code == 200
+
+        # 3b. Verify email với token không hợp lệ -> 400
+        res_ver_bad = await client.get("/api/auth/verify-email?token=invalid_token")
+        assert res_ver_bad.status_code == 400
+
+        # 4. Refresh token không có cookie -> 401
+        client.cookies.clear()
+        res_ref_no_cookie = await client.post("/api/auth/refresh")
+        assert res_ref_no_cookie.status_code == 401
+
+        # 5. Refresh token với cookie sai -> 401
+        res_ref_bad_cookie = await client.post("/api/auth/refresh", cookies={"refresh_token": "bad_token"})
+        assert res_ref_bad_cookie.status_code == 401
+
+        # 6. Logout xóa cookie -> 200
+        res_logout = await client.post("/api/auth/logout", cookies={"refresh_token": "some_token"})
+        assert res_logout.status_code == 200
 
 
 @pytest.mark.integration
@@ -1014,6 +1048,242 @@ async def test_edge_tts_provider_offline_unit():
 
         audio = await provider.synthesize("Xin chào buổi sáng", "vi-VN-HoaiMyNeural")
         assert audio == b"frame_1frame_2"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_dictionary_api_endpoints():
+    """Kiểm tra toàn bộ CRUD trên API route /api/dictionary."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        email = f"dict_api_{time.time()}@example.com"
+        await client.post("/api/auth/register", json={
+            "email": email,
+            "password": "Password123!",
+            "full_name": "Dict User",
+        })
+        login_res = await client.post("/api/auth/login", json={"email": email, "password": "Password123!"})
+        token = login_res.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # 1. List rỗng
+        r_list = await client.get("/api/dictionary", headers=headers)
+        assert r_list.status_code == 200
+        assert r_list.json() == []
+
+        # 2. Tạo mới rule
+        r_create = await client.post("/api/dictionary", headers=headers, json={
+            "word": "VND",
+            "replacement": "đồng",
+            "category": "currency",
+        })
+        assert r_create.status_code == 201
+        rule_data = r_create.json()
+        assert rule_data["word"] == "VND"
+        rule_id = rule_data["id"]
+
+        # 3. Tạo lỗi validation rỗng -> 400
+        r_dup = await client.post("/api/dictionary", headers=headers, json={
+            "word": "VND",
+            "replacement": "   ",
+        })
+        assert r_dup.status_code == 400
+
+        # 4. Cập nhật rule
+        r_up = await client.put(f"/api/dictionary/{rule_id}", headers=headers, json={
+            "replacement": "Việt Nam Đồng",
+            "category": "custom",
+            "is_active": False,
+        })
+        assert r_up.status_code == 200
+        assert r_up.json()["replacement"] == "Việt Nam Đồng"
+        assert r_up.json()["is_active"] is False
+
+        # 5. Xóa rule
+        r_del = await client.delete(f"/api/dictionary/{rule_id}", headers=headers)
+        assert r_del.status_code == 200
+        assert "message" in r_del.json()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_history_patch_and_edge_branches():
+    """Kiểm tra PATCH /api/history/{id} và các phân quyền liên quan."""
+    from app.models.generation import Generation
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        e1 = f"hist_u1_{time.time()}@example.com"
+        e2 = f"hist_u2_{time.time()}@example.com"
+        reg1 = await client.post("/api/auth/register", json={"email": e1, "password": "Password123!", "full_name": "U1"})
+        reg2 = await client.post("/api/auth/register", json={"email": e2, "password": "Password123!", "full_name": "U2"})
+        u1_id = reg1.json()["id"]
+        log1 = await client.post("/api/auth/login", json={"email": e1, "password": "Password123!"})
+        log2 = await client.post("/api/auth/login", json={"email": e2, "password": "Password123!"})
+        h1 = {"Authorization": f"Bearer {log1.json()['access_token']}"}
+        h2 = {"Authorization": f"Bearer {log2.json()['access_token']}"}
+
+        async with AsyncSessionLocal() as db:
+            gen = Generation(
+                user_id=u1_id,
+                title="Old Title",
+                text="Nội dung kiểm thử",
+                voice="vi-VN-HoaiMyNeural",
+                char_count=17,
+                duration=5.0,
+                format="mp3",
+                file_size=1024,
+                file_path="/tmp/test_hist_audio.mp3",
+                is_preview=False,
+            )
+            db.add(gen)
+            await db.commit()
+            await db.refresh(gen)
+            gen_id = gen.id
+
+        # 1. Update title bởi chính chủ -> 200
+        patch_ok = await client.patch(f"/api/history/{gen_id}", headers=h1, json={"title": "Updated Brand New Title"})
+        assert patch_ok.status_code == 200
+        assert patch_ok.json()["title"] == "Updated Brand New Title"
+
+        # 2. Update title bởi người khác -> 403
+        patch_forbid = await client.patch(f"/api/history/{gen_id}", headers=h2, json={"title": "Hack Title"})
+        assert patch_forbid.status_code == 403
+
+        # 3. Update title không tồn tại -> 404
+        patch_nf = await client.patch("/api/history/999999", headers=h1, json={"title": "None"})
+        assert patch_nf.status_code == 404
+
+        # 4. Delete bởi người khác -> 403
+        del_forbid = await client.delete(f"/api/history/{gen_id}", headers=h2)
+        assert del_forbid.status_code == 403
+
+        # 5. List có search và filter
+        hist_filter = await client.get("/api/history?search=kiểm+thử&format=mp3", headers=h1)
+        assert hist_filter.status_code == 200
+        assert hist_filter.json()["total"] >= 1
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_payment_routes_extra_branches():
+    """Kiểm tra coupon validate API, webhook Stripe, VietQR và admin update plan."""
+    from app.models.payment import Coupon, PricingPlan
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        e_user = f"extra_pay_{time.time()}@example.com"
+        await client.post("/api/auth/register", json={"email": e_user, "password": "Password123!", "full_name": "Pay User"})
+        log_u = await client.post("/api/auth/login", json={"email": e_user, "password": "Password123!"})
+        h_user = {"Authorization": f"Bearer {log_u.json()['access_token']}"}
+
+        # Tạo admin
+        async with AsyncSessionLocal() as db:
+            await PaymentService.seed_defaults_if_empty(db)
+            admin_user = User(
+                email=f"admin_extra_{time.time()}@example.com",
+                hashed_password=hash_password("AdminPass123!"),
+                full_name="Admin Extra",
+                is_admin=True,
+                is_active=True,
+            )
+            coupon = Coupon(
+                code=f"ROUTE_CP_{int(time.time()*1000)}",
+                discount_type="fixed",
+                discount_value=10000,
+                min_order_amount=50000,
+                is_active=True,
+            )
+            plan = PricingPlan(
+                code=f"plan_extra_{int(time.time()*1000)}",
+                name="Gói test update",
+                type="credit_pack",
+                price=50000,
+                currency="VND",
+                credits=50000,
+                is_active=True,
+            )
+            db.add_all([admin_user, coupon, plan])
+            await db.commit()
+            await db.refresh(admin_user)
+            await db.refresh(coupon)
+            await db.refresh(plan)
+            plan_id = plan.id
+            coupon_code = coupon.code
+
+        admin_login = await client.post("/api/auth/login", json={"email": admin_user.email, "password": "AdminPass123!"})
+        h_admin = {"Authorization": f"Bearer {admin_login.json()['access_token']}"}
+
+        # 1. Coupon validate
+        # - Invalid coupon
+        c_inv = await client.post("/api/payments/coupons/validate", headers=h_user, json={"code": "NONEXISTENT", "order_amount": 100000})
+        assert c_inv.status_code == 200
+        assert c_inv.json()["valid"] is False
+
+        # - Valid coupon
+        c_val = await client.post("/api/payments/coupons/validate", headers=h_user, json={"code": coupon_code, "order_amount": 100000})
+        assert c_val.status_code == 200
+        assert c_val.json()["valid"] is True
+        assert c_val.json()["discount_amount"] == 10000
+
+        # 2. Admin update plan
+        p_up = await client.put(f"/api/payments/admin/plans/{plan_id}", headers=h_admin, json={"name": "Gói Đã Đổi Tên", "price": 60000})
+        assert p_up.status_code == 200
+        assert p_up.json()["name"] == "Gói Đã Đổi Tên"
+
+        # - Admin update plan non-existent -> 404
+        p_up_nf = await client.put("/api/payments/admin/plans/999999", headers=h_admin, json={"name": "404"})
+        assert p_up_nf.status_code == 404
+
+        # 3. Webhook Stripe edge cases
+        # - Invalid signature
+        with patch("app.services.payment_service.PaymentService.verify_stripe_signature", return_value=False):
+            st_bad_sig = await client.post("/api/payments/webhook/stripe", headers={"Stripe-Signature": "bad_sig"}, content=b"{}")
+            assert st_bad_sig.status_code == 400
+
+        # - Invalid JSON
+        with patch("app.services.payment_service.PaymentService.verify_stripe_signature", return_value=True):
+            st_bad_json = await client.post("/api/payments/webhook/stripe", headers={"Stripe-Signature": "sig"}, content=b"invalid-json")
+            assert st_bad_json.status_code == 400
+
+        # - Valid JSON but unknown order
+        with patch("app.services.payment_service.PaymentService.verify_stripe_signature", return_value=True):
+            st_unknown = await client.post(
+                "/api/payments/webhook/stripe",
+                headers={"Stripe-Signature": "sig"},
+                json={
+                    "type": "checkout.session.completed",
+                    "data": {"object": {"client_reference_id": "VOX999999", "payment_intent": "pi_test"}},
+                },
+            )
+            assert st_unknown.status_code == 200
+            assert st_unknown.json()["received"] is True
+
+        # 4. Webhook VietQR edge cases
+        # - Invalid JSON body
+        vq_bad_json = await client.post("/api/payments/webhook/vietqr", content=b"not a json")
+        assert vq_bad_json.status_code == 200
+        assert vq_bad_json.json()["success"] is False
+
+        # - Unknown order content
+        vq_unknown = await client.post("/api/payments/webhook/vietqr", json={"content": "UNKNOWN_TRANSACTION_CONTENT"})
+        assert vq_unknown.status_code == 200
+        assert vq_unknown.json()["success"] is False
+
+        # 5. Webhook PayOS unknown order
+        with patch("app.services.payment_service.PaymentService.verify_payos_signature", return_value=True):
+            payos_unknown = await client.post(
+                "/api/payments/webhook/payos",
+                json={
+                    "code": "00",
+                    "desc": "success",
+                    "data": {"orderCode": 99999988, "amount": 50000},
+                    "signature": "valid_signature",
+                },
+            )
+            assert payos_unknown.status_code == 200
+            assert payos_unknown.json()["success"] is False
+
 
 
 
