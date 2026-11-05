@@ -46,12 +46,12 @@ jobs:
       run:
         working-directory: backend
     env:
-      ENVIRONMENT: testing
-      DATABASE_URL: sqlite+aiosqlite:///:memory:
-      SECRET_KEY: test-secret-key-12345678901234567890
-      ALGORITHM: HS256
-      ACCESS_TOKEN_EXPIRE_MINUTES: 30
-      REFRESH_TOKEN_EXPIRE_DAYS: 7
+      ENVIRONMENT: "testing"
+      DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+      SECRET_KEY: "test-secret-key-12345678901234567890"
+      ALGORITHM: "HS256"
+      ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+      REFRESH_TOKEN_EXPIRE_DAYS: "7"
       REDIS_URL: ""
     steps:
       - name: Checkout repository
@@ -134,3 +134,4 @@ jobs:
       - name: Audit Frontend dependencies
         run: |
           cd frontend && npm audit --audit-level=high || true
+
