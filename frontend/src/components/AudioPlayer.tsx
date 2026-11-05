@@ -92,11 +92,18 @@ export default function AudioPlayer({
     setCurrentTime(0)
   }
 
+  const progressPercent = audioDuration > 0 ? Math.min(100, Math.max(0, (currentTime / audioDuration) * 100)) : 0
+
   return (
     <div className="bg-white dark:bg-[#12151C] border border-indigo-200/80 dark:border-indigo-500/20 rounded-card p-4 shadow-sm flex flex-col gap-3 transition-all">
       <audio
         ref={audioRef}
         onTimeUpdate={handleTimeUpdate}
+        onLoadedMetadata={() => {
+          if (audioRef.current?.duration && (!duration || duration <= 0)) {
+            setAudioDuration(audioRef.current.duration)
+          }
+        }}
         onEnded={handleEnded}
         className="hidden"
       />
@@ -189,7 +196,8 @@ export default function AudioPlayer({
             step={0.1}
             value={currentTime}
             onChange={handleSeek}
-            className="w-full h-1.5 bg-slate-200 dark:bg-[#181C25] rounded-lg appearance-none cursor-pointer accent-indigo-600"
+            style={{ '--val': `${progressPercent}%` } as React.CSSProperties}
+            className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-indigo-600"
           />
         </div>
 

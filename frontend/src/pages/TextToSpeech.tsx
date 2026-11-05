@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useAppConfig } from '../hooks/useAppConfig'
 import { useVoices } from '../hooks/useVoices'
@@ -148,13 +148,52 @@ export default function TextToSpeech() {
   const selectedVoice = voices.find((v) => v.id === selectedVoiceId)
   const selectedVoiceName = selectedVoice?.name ?? selectedVoiceId
 
+  const location = useLocation()
+
+  // Khôi phục văn bản và cài đặt khi người dùng bấm "Mở lại" từ trang Lịch sử xử lý
+  useEffect(() => {
+    const job = (location.state as { reopenJob?: TTSJob })?.reopenJob
+    if (job) {
+      if (job.text) setText(job.text)
+      if (job.voice) setSelectedVoiceId(job.voice)
+      if (job.rate) {
+        const parsedRate = parseInt(job.rate.replace('%', ''))
+        if (!isNaN(parsedRate)) setRate(parsedRate)
+      }
+      if (job.pitch) {
+        const parsedPitch = parseInt(job.pitch.replace('Hz', ''))
+        if (!isNaN(parsedPitch)) setPitch(parsedPitch)
+      }
+      if (job.volume) {
+        const parsedVolume = parseInt(job.volume.replace('%', ''))
+        if (!isNaN(parsedVolume)) setVolume(parsedVolume)
+      }
+      if (job.format === 'mp3' || job.format === 'wav') {
+        setOutputFormat(job.format)
+      }
+      if (job.audio_url) {
+        setReplayUrl(job.audio_url)
+        setReplayVoice(voices.find((v) => v.id === job.voice)?.name || job.voice)
+        setReplayIsPreview(false)
+        setReplayFormat((job.format as 'mp3' | 'wav') || 'mp3')
+        setReplayDuration(job.duration || 0)
+        if (job.srt_url) setReplaySrtUrl(job.srt_url)
+        if (job.vtt_url) setReplayVttUrl(job.vtt_url)
+      }
+      toast.info('Đã nạp lại văn bản và cài đặt từ lịch sử xử lý.')
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [location.state, voices, toast])
+
   const rateStr = `${rate >= 0 ? '+' : ''}${rate}%`
   const pitchStr = `${pitch >= 0 ? '+' : ''}${pitch}Hz`
   const volumeStr = `${volume >= 0 ? '+' : ''}${volume}%`
 
+  const userId = user?.id
+
   // Tải danh sách recent jobs từ backend
   const fetchRecentJobs = useCallback(async () => {
-    if (!user) return
+    if (!userId) return
     setIsFetchingRecentJobs(true)
     try {
       const data = await listRecentJobs(20)
@@ -164,22 +203,29 @@ export default function TextToSpeech() {
     } finally {
       setIsFetchingRecentJobs(false)
     }
-  }, [user])
+  }, [userId])
 
   useEffect(() => {
-    if (user) {
+    if (userId) {
       fetchRecentJobs()
     }
-  }, [user, fetchRecentJobs])
+  }, [userId, fetchRecentJobs])
 
-  // Khi activeJob hoàn thành, làm mới danh sách job và credit
+  // Theo dõi trạng thái hoàn thành của job hiện tại (chỉ thông báo một lần khi vừa kết thúc xử lý)
+  const wasRunningRef = useRef(false)
+
   useEffect(() => {
-    if (activeJob?.status === 'done') {
-      fetchRecentJobs()
-      refreshUser()
-      toast.success('Đã tạo xong tệp âm thanh chất lượng cao!')
+    if (isJobRunning) {
+      wasRunningRef.current = true
+    } else if (wasRunningRef.current) {
+      wasRunningRef.current = false
+      if (activeJob?.status === 'done') {
+        fetchRecentJobs()
+        refreshUser()
+        toast.success('Đã tạo xong tệp âm thanh chất lượng cao!')
+      }
     }
-  }, [activeJob?.status, fetchRecentJobs, refreshUser, toast])
+  }, [isJobRunning, activeJob?.status, fetchRecentJobs, refreshUser, toast])
 
   // Ước tính số credit tiêu tốn (1 credit = 1 ký tự)
   const estimatedCredits = text.length

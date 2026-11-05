@@ -42,6 +42,9 @@ class Generation(Base):
     # is_preview: True nếu chỉ tạo 200 ký tự đầu
     is_preview: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     provider: Mapped[str] = mapped_column(String(50), default="edge", nullable=False)
+
+    # Tiêu đề tùy chỉnh do người dùng đặt (tối đa 200 ký tự)
+    title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
