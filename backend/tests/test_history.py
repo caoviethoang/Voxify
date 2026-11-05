@@ -1,13 +1,12 @@
 """Unit and integration tests for History API (Issue #8)."""
-import asyncio
 import time
-from pathlib import Path
+
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
-from app.main import app
 from app.db import AsyncSessionLocal
+from app.main import app
 from app.models.generation import Generation
 from app.routes.history import cleanup_old_generations
 
@@ -135,7 +134,7 @@ async def test_history_crud_and_filters(tmp_path):
 @pytest.mark.asyncio
 async def test_cleanup_old_generations():
     """Kiểm tra hàm dọn dẹp các bản ghi preview cũ."""
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
 
     async with AsyncSessionLocal() as db:
         unique_suffix = str(time.time())

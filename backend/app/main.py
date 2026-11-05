@@ -1,6 +1,6 @@
 """FastAPI application entry point."""
-from contextlib import asynccontextmanager
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
@@ -91,7 +91,7 @@ app.add_middleware(
 )
 
 # Error handler tùy chỉnh
-app.add_exception_handler(AppError, app_error_handler)
+app.add_exception_handler(AppError, app_error_handler)  # type: ignore[arg-type]
 
 # Đăng ký routes API
 app.include_router(auth_router)

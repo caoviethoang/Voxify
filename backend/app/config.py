@@ -1,7 +1,7 @@
 """Cấu hình ứng dụng — đọc từ biến môi trường hoặc file .env."""
 from functools import lru_cache
-from pathlib import Path
 from typing import Any
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -92,7 +92,7 @@ class Settings(BaseSettings):
     )
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     """Singleton cấu hình ứng dụng."""
     return Settings()

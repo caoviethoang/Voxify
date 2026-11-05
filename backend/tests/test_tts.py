@@ -1,11 +1,8 @@
-import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import get_settings
 from app.main import app
 from app.providers.base import TTSProvider
-from app.providers.edge import EdgeTTSProvider
 from app.services.text_splitter import split_text_into_chunks
 from app.services.tts_service import TTSService
 

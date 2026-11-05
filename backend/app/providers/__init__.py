@@ -1,6 +1,7 @@
 """ProviderRegistry — chọn TTS provider theo tên từ cấu hình."""
 from app.providers.base import TTSProvider
 from app.providers.edge import EdgeTTSProvider
+from app.providers.fake import FakeTTSProvider
 
 
 class ProviderRegistry:
@@ -8,6 +9,7 @@ class ProviderRegistry:
 
     _providers: dict[str, type[TTSProvider]] = {
         "edge": EdgeTTSProvider,
+        "fake": FakeTTSProvider,
     }
 
     @classmethod

@@ -1,0 +1,25 @@
+# Cấu hình linter Ruff cho Voxify Backend
+target-version = "py311"
+line-length = 120
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "E712",  # Avoid equality comparisons to True/False (SQLAlchemy requires == True / == False)
+    "B008",  # do not perform function calls in argument defaults (FastAPI Depends)
+    "B904",  # raise ... from err
+]
+
+[lint.per-file-ignores]
+"app/models/*" = ["F821"]
+"tests/*" = ["E402", "F841"]
+
+[lint.isort]
+combine-as-imports = true
+known-first-party = ["app"]

@@ -8,9 +8,9 @@ Yêu cầu nghiệm thu:
 5. API endpoints: /api/credits, /api/credits/transactions, /api/credits/estimate.
 """
 import asyncio
+
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import AsyncSessionLocal
 from app.main import app

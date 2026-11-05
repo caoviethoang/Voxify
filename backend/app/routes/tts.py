@@ -3,26 +3,28 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.core.errors import AppError
 from app.db import get_db
-from app.dependencies import get_tts_service, get_optional_current_user, get_current_active_user
+from app.dependencies import get_current_active_user, get_optional_current_user, get_tts_service
 from app.models.generation import Generation
 from app.models.user import User
 from app.schemas.tts import (
-    TTSRequest,
     TTSJobCreateRequest,
     TTSJobResponse,
+    TTSRequest,
 )
-from app.services.tts_service import TTSService
-from app.services.tts_job_service import TTSJobService
-from app.services.storage_service import StorageService
 from app.services.audio_service import AudioService
 from app.services.credit_service import CreditService, InsufficientCreditsError
+from app.services.storage_service import StorageService
+from app.services.tts_job_service import TTSJobService
+from app.services.tts_service import TTSService
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +82,7 @@ async def create_tts_job(
     if not clean_text:
         raise HTTPException(status_code=400, detail="Văn bản không được để trống.")
 
-    settings = get_settings()
+    get_settings()
     # Hỗ trợ văn bản dài cho background job (tối đa 100.000 ký tự)
     max_job_chars = 100000
     if len(clean_text) > max_job_chars:
@@ -107,6 +109,8 @@ async def create_tts_job(
             status_code=402,
             detail=f"Số dư credit không đủ ({e.current}/{e.required}). Vui lòng nạp thêm credit.",
         )
+    except AppError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
     except Exception as exc:
         logger.error(f"Lỗi khi tạo Job TTS: {exc}")
         raise HTTPException(status_code=500, detail=str(exc))

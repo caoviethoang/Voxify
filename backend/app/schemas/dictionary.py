@@ -1,6 +1,7 @@
 """Schemas cho Từ điển phát âm cá nhân (Pronunciation Dictionary)."""
 from datetime import datetime
 from typing import Optional
+
 from pydantic import BaseModel, ConfigDict, Field
 
 

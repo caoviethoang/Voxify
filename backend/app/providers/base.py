@@ -18,7 +18,7 @@ class TTSProvider(ABC):
     async def list_voices(self) -> List[Dict[str, Any]]:
         """
         Lấy danh sách giọng đọc khả dụng.
-        
+
         Trả về danh sách dict chuẩn hóa với các trường tối thiểu:
         - id: str (mã định danh giọng đọc)
         - name: str (tên hiển thị thân thiện)
@@ -39,14 +39,14 @@ class TTSProvider(ABC):
     ) -> bytes:
         """
         Tổng hợp văn bản thành tệp âm thanh nhị phân (mặc định định dạng MP3).
-        
+
         Tham số:
         - text: Văn bản cần đọc
         - voice: ID giọng đọc
         - rate: Tốc độ đọc (ví dụ: '+0%', '+20%', '-10%')
         - pitch: Cao độ giọng (ví dụ: '+0Hz', '+10Hz', '-5Hz')
         - volume: Âm lượng (ví dụ: '+0%', '-10%')
-        
+
         Trả về:
         - bytes: Dữ liệu âm thanh MP3
         """

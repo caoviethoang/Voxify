@@ -23,7 +23,9 @@ dist/
 dist-ssr/
 
 # Storage and temp
-storage/
+/storage/
+backend/storage/
+!backend/app/storage/
 temp/
 *.sqlite
 *.db

@@ -1,8 +1,8 @@
 """Module bảo mật: băm mật khẩu, mã hóa và giải mã JWT token."""
-from datetime import datetime, timedelta, timezone
 import hashlib
 import logging
 import secrets
+from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, Optional
 
 import bcrypt
@@ -44,7 +44,7 @@ def create_access_token(
     """Tạo JWT access token (mặc định 15 phút)."""
     settings = get_settings()
     to_encode = data.copy()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if expires_delta:
         expire = now + expires_delta
     else:
@@ -71,7 +71,7 @@ def create_refresh_token(
     settings = get_settings()
     raw_token = secrets.token_urlsafe(48)
     token_hash = hash_token(raw_token)
-    expires_at = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
+    expires_at = datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days)
     return raw_token, token_hash, expires_at
 
 
@@ -82,7 +82,7 @@ def create_timed_token(
 ) -> str:
     """Tạo JWT token có thời hạn cho reset mật khẩu hoặc xác thực email."""
     settings = get_settings()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     to_encode = payload.copy()
     to_encode.update({
         "exp": now + timedelta(minutes=expires_minutes),
