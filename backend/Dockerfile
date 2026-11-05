@@ -1,7 +1,7 @@
 FROM python:3.11-slim AS base
 WORKDIR /app
 RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends curl && \
+    apt-get install -y --no-install-recommends curl ffmpeg && \
     rm -rf /var/lib/apt/lists/*
 
 FROM base AS build

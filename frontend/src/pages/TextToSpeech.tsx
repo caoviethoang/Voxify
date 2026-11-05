@@ -4,10 +4,14 @@ import { useAuth } from '../hooks/useAuth'
 import { useAppConfig } from '../hooks/useAppConfig'
 import { useVoices } from '../hooks/useVoices'
 import { useTTS } from '../hooks/useTTS'
+import { useTTSJob } from '../hooks/useTTSJob'
 import { useToast } from '../hooks/useToast'
 import VoicePicker from '../components/ui/VoicePicker'
 import AudioPlayer from '../components/AudioPlayer'
 import SliderControl from '../components/SliderControl'
+import DictionaryModal from '../components/studio/DictionaryModal'
+import BatchModal from '../components/studio/BatchModal'
+import { listRecentJobs, type TTSJob } from '../api/tts'
 import {
   Sliders,
   History,
@@ -30,6 +34,12 @@ import {
   RefreshCw,
   Plus,
   AlertTriangle,
+  Layers,
+  Users,
+  Trash2,
+  FileText,
+  CheckCircle2,
+  Loader2,
 } from 'lucide-react'
 
 // Mẫu văn bản theo chủ đề
@@ -70,7 +80,20 @@ export default function TextToSpeech() {
   const { user, updateCredits, refreshUser } = useAuth()
   const { config } = useAppConfig()
   const { data: voiceData } = useVoices()
-  const { isLoading, currentUrl, history, generate, clearHistory } = useTTS()
+  const {
+    isLoading: isPreviewLoading,
+    currentUrl: previewUrl,
+    generate: generatePreview,
+  } = useTTS()
+  const {
+    activeJob,
+    isJobRunning,
+    jobProgress,
+    jobError,
+    startJob,
+    getJobAudioUrl,
+    getJobSubtitleUrl,
+  } = useTTSJob()
   const toast = useToast()
 
   // State văn bản & thông số
@@ -79,22 +102,35 @@ export default function TextToSpeech() {
   const [rate, setRate] = useState(0)
   const [pitch, setPitch] = useState(0)
   const [volume, setVolume] = useState(0)
+  const [outputFormat, setOutputFormat] = useState<'mp3' | 'wav'>('mp3')
+  const [applyDictionary, setApplyDictionary] = useState(true)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Modals state
+  const [isVoicePickerOpen, setIsVoicePickerOpen] = useState(false)
+  const [isDictionaryModalOpen, setIsDictionaryModalOpen] = useState(false)
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false)
+  const [isMultiVoiceMenuOpen, setIsMultiVoiceMenuOpen] = useState(false)
 
   // Right panel: Tab & Collapse
   const [rightPanelTab, setRightPanelTab] = useState<'settings' | 'history'>('settings')
   const [rightPanelOpen, setRightPanelOpen] = useState(true)
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
 
-  // VoicePicker Modal
-  const [isVoicePickerOpen, setIsVoicePickerOpen] = useState(false)
+  // Recent jobs from server
+  const [recentJobs, setRecentJobs] = useState<TTSJob[]>([])
+  const [isFetchingRecentJobs, setIsFetchingRecentJobs] = useState(false)
 
   // Replay state
   const [replayUrl, setReplayUrl] = useState<string | null>(null)
   const [replayVoice, setReplayVoice] = useState('')
   const [replayIsPreview, setReplayIsPreview] = useState(false)
+  const [replayFormat, setReplayFormat] = useState<'mp3' | 'wav'>('mp3')
+  const [replayDuration, setReplayDuration] = useState(0)
+  const [replaySrtUrl, setReplaySrtUrl] = useState<string | undefined>()
+  const [replayVttUrl, setReplayVttUrl] = useState<string | undefined>()
 
-  // Conversion table search & selection
+  // Table search & selection
   const [tableSearch, setTableSearch] = useState('')
   const [selectedTableRows, setSelectedTableRows] = useState<string[]>([])
 
@@ -116,96 +152,130 @@ export default function TextToSpeech() {
   const pitchStr = `${pitch >= 0 ? '+' : ''}${pitch}Hz`
   const volumeStr = `${volume >= 0 ? '+' : ''}${volume}%`
 
+  // Tải danh sách recent jobs từ backend
+  const fetchRecentJobs = useCallback(async () => {
+    if (!user) return
+    setIsFetchingRecentJobs(true)
+    try {
+      const data = await listRecentJobs(20)
+      setRecentJobs(data)
+    } catch (err) {
+      console.warn('Lỗi tải danh sách job gần đây:', err)
+    } finally {
+      setIsFetchingRecentJobs(false)
+    }
+  }, [user])
+
+  useEffect(() => {
+    if (user) {
+      fetchRecentJobs()
+    }
+  }, [user, fetchRecentJobs])
+
+  // Khi activeJob hoàn thành, làm mới danh sách job và credit
+  useEffect(() => {
+    if (activeJob?.status === 'done') {
+      fetchRecentJobs()
+      refreshUser()
+      toast.success('Đã tạo xong tệp âm thanh chất lượng cao!')
+    }
+  }, [activeJob?.status, fetchRecentJobs, refreshUser, toast])
+
   // Ước tính số credit tiêu tốn (1 credit = 1 ký tự)
   const estimatedCredits = text.length
   const userBalance = user?.credits ?? 0
   const isInsufficient = text.trim().length > 0 && estimatedCredits > userBalance
 
-  // Tổng hợp giọng nói
-  const handleSynthesize = useCallback(
-    async (isPreview: boolean) => {
-      if (!text.trim()) {
-        toast.error('Vui lòng nhập văn bản trước khi tạo giọng nói.')
-        return
-      }
+  // Xử lý tạo giọng nói (Bất đồng bộ qua Worker nền)
+  const handleGenerateJob = async () => {
+    if (!text.trim()) {
+      toast.error('Vui lòng nhập văn bản trước khi tạo giọng nói.')
+      return
+    }
 
-      if (!isPreview) {
-        if (!user) {
-          toast.error('Vui lòng đăng nhập để sử dụng tính năng tạo giọng nói đầy đủ.')
-          return
-        }
-        if (estimatedCredits > userBalance) {
-          toast.error(
-            `Số dư credit không đủ (${userBalance.toLocaleString('vi-VN')} / ${estimatedCredits.toLocaleString(
-              'vi-VN'
-            )} credit). Vui lòng nạp thêm credit.`
-          )
-          return
-        }
-      }
+    if (!user) {
+      toast.error('Vui lòng đăng nhập để sử dụng tính năng tạo giọng nói.')
+      return
+    }
 
-      const voice = selectedVoiceId || config.default_voice || 'vi-VN-HoaiMyNeural'
-      setReplayUrl(null)
+    if (estimatedCredits > userBalance) {
+      toast.error(
+        `Số dư credit không đủ (${userBalance.toLocaleString('vi-VN')} / ${estimatedCredits.toLocaleString(
+          'vi-VN'
+        )} credit). Vui lòng nạp thêm credit.`
+      )
+      return
+    }
 
-      try {
-        const result = await generate({
-          text: text.trim(),
-          voice,
-          voiceName: selectedVoiceName,
-          rate: rateStr,
-          pitch: pitchStr,
-          volume: volumeStr,
-          preview: isPreview,
-        })
+    const voice = selectedVoiceId || config.default_voice || 'vi-VN-HoaiMyNeural'
+    setReplayUrl(null)
 
-        if (!result) return
+    try {
+      await startJob({
+        text: text.trim(),
+        voice,
+        rate: rateStr,
+        pitch: pitchStr,
+        volume: volumeStr,
+        format: outputFormat,
+        apply_dictionary: applyDictionary,
+      })
+      toast.info('Tác vụ tạo giọng nói đã được đưa vào hàng đợi xử lý.')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Lỗi khi tạo tác vụ'
+      toast.error(msg)
+    }
+  }
 
-        // Cập nhật số dư credit lên Topbar và Sidebar tức thì
-        if (typeof result.creditBalance === 'number') {
-          updateCredits(result.creditBalance)
-        } else {
-          refreshUser()
-        }
+  // Xử lý nghe thử 200 ký tự (Miễn phí qua API tts nhanh)
+  const handlePreview = async () => {
+    if (!text.trim()) {
+      toast.error('Vui lòng nhập văn bản trước khi nghe thử.')
+      return
+    }
 
-        toast.success(isPreview ? 'Đã tạo bản nghe thử 200 ký tự!' : 'Tổng hợp giọng nói thành công!')
-      } catch (err: unknown) {
-        // Làm mới lại số dư user khi gặp lỗi để phản ánh số credit đã hoàn trả (refund)
+    const voice = selectedVoiceId || config.default_voice || 'vi-VN-HoaiMyNeural'
+    setReplayUrl(null)
+
+    try {
+      const result = await generatePreview({
+        text: text.trim().substring(0, 200),
+        voice,
+        voiceName: selectedVoiceName,
+        rate: rateStr,
+        pitch: pitchStr,
+        volume: volumeStr,
+        preview: true,
+      })
+
+      if (!result) return
+
+      if (typeof result.creditBalance === 'number') {
+        updateCredits(result.creditBalance)
+      } else {
         refreshUser()
-        const msg = err instanceof Error ? err.message : 'Lỗi khi tạo giọng nói'
-        toast.error(msg)
       }
-    },
-    [
-      text,
-      user,
-      estimatedCredits,
-      userBalance,
-      selectedVoiceId,
-      config.default_voice,
-      selectedVoiceName,
-      rateStr,
-      pitchStr,
-      volumeStr,
-      generate,
-      updateCredits,
-      refreshUser,
-      toast,
-    ]
-  )
+
+      toast.success('Đã tạo bản nghe thử 200 ký tự miễn phí!')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Lỗi khi nghe thử'
+      toast.error(msg)
+    }
+  }
 
   // Phím tắt Ctrl+Enter hoặc Cmd+Enter để tạo nhanh
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault()
-        if (!isLoading && text.trim()) {
-          handleSynthesize(false)
+        if (!isJobRunning && !isPreviewLoading && text.trim() && !isInsufficient) {
+          handleGenerateJob()
         }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleSynthesize, isLoading, text])
+  }, [handleGenerateJob, isJobRunning, isPreviewLoading, text, isInsufficient])
 
   // Chèn khoảng nghỉ vào textarea
   const insertPause = (milliseconds: number) => {
@@ -213,14 +283,33 @@ export default function TextToSpeech() {
     const el = textareaRef.current
     const start = el.selectionStart
     const end = el.selectionEnd
-    const pauseTag = ` [nghỉ ${milliseconds}ms] `
+    const pauseTag = ` [pause ${milliseconds >= 1000 ? `${milliseconds / 1000}s` : `${milliseconds}ms`}] `
     const newText = text.substring(0, start) + pauseTag + text.substring(end)
     setText(newText)
     setTimeout(() => {
       el.focus()
       el.setSelectionRange(start + pauseTag.length, start + pauseTag.length)
     }, 0)
-    toast.info(`Đã chèn điểm nghỉ ${milliseconds}ms`)
+    toast.info(`Đã chèn ngắt nghỉ ${milliseconds >= 1000 ? `${milliseconds / 1000}s` : `${milliseconds}ms`}`)
+  }
+
+  // Chèn thẻ đa giọng [Voice: VoiceName]
+  const insertVoiceTag = (voiceId: string) => {
+    if (!textareaRef.current) return
+    const v = voices.find((item) => item.id === voiceId)
+    const voiceAlias = v?.name.split(' - ')[0] || voiceId
+    const el = textareaRef.current
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    const voiceTag = `\n[Voice: ${voiceAlias}] `
+    const newText = text.substring(0, start) + voiceTag + text.substring(end)
+    setText(newText)
+    setIsMultiVoiceMenuOpen(false)
+    setTimeout(() => {
+      el.focus()
+      el.setSelectionRange(start + voiceTag.length, start + voiceTag.length)
+    }, 0)
+    toast.info(`Đã chèn đoạn kịch bản giọng ${voiceAlias}`)
   }
 
   // Đặt lại các thanh trượt
@@ -231,31 +320,40 @@ export default function TextToSpeech() {
     toast.info('Đã đặt lại các thông số âm thanh về mặc định.')
   }
 
-  // Tải file audio
-  const handleDownload = (url: string, voiceId?: string) => {
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `voxify-${voiceId || 'audio'}-${Date.now()}.mp3`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    toast.success('Bắt đầu tải file âm thanh...')
+  // Xóa nội dung văn bản
+  const handleClearText = () => {
+    if (!text.trim()) return
+    setText('')
+    toast.info('Đã xóa nội dung văn bản.')
   }
 
-  // Nạp lại cấu hình từ một bản ghi lịch sử
-  const handleReplayItem = (item: (typeof history)[0]) => {
-    setReplayUrl(item.url)
-    setReplayVoice(item.voiceName)
-    setReplayIsPreview(item.isPreview)
-    setText(item.text)
-    if (item.voiceId) setSelectedVoiceId(item.voiceId)
+  // Nạp lại cấu hình từ một job đã hoàn thành
+  const handleReplayJob = (job: TTSJob) => {
+    setReplayUrl(getJobAudioUrl(job.id))
+    setReplayVoice(voices.find((v) => v.id === job.voice)?.name || job.voice)
+    setReplayIsPreview(false)
+    setReplayFormat((job.format as 'mp3' | 'wav') || 'mp3')
+    setReplayDuration(job.duration || 0)
+    setReplaySrtUrl(getJobSubtitleUrl(job.id, 'srt'))
+    setReplayVttUrl(getJobSubtitleUrl(job.id, 'vtt'))
+    setText(job.text)
+    if (job.voice) setSelectedVoiceId(job.voice)
     toast.info('Đã nạp văn bản và âm thanh bản ghi.')
   }
 
-  // Audio URL hiển thị
-  const activeUrl = replayUrl || currentUrl
-  const activeVoiceName = replayUrl ? replayVoice : selectedVoiceName
-  const activeIsPreview = replayUrl ? replayIsPreview : false
+  // Xác định audio URL đang hiển thị trên Player
+  const hasActiveJobDone = activeJob && activeJob.status === 'done'
+  const activeUrl = replayUrl || (hasActiveJobDone ? getJobAudioUrl(activeJob.id) : previewUrl)
+  const activeVoiceName = replayUrl
+    ? replayVoice
+    : hasActiveJobDone
+    ? voices.find((v) => v.id === activeJob.voice)?.name || activeJob.voice
+    : selectedVoiceName
+  const activeDuration = replayUrl ? replayDuration : hasActiveJobDone ? activeJob.duration : 0
+  const activeFormat = replayUrl ? replayFormat : hasActiveJobDone ? (activeJob.format as 'mp3' | 'wav') : outputFormat
+  const activeSrtUrl = replayUrl ? replaySrtUrl : hasActiveJobDone ? getJobSubtitleUrl(activeJob.id, 'srt') : undefined
+  const activeVttUrl = replayUrl ? replayVttUrl : hasActiveJobDone ? getJobSubtitleUrl(activeJob.id, 'vtt') : undefined
+  const activeIsPreview = replayUrl ? replayIsPreview : !hasActiveJobDone && Boolean(previewUrl)
 
   return (
     <div className="flex flex-col lg:flex-row gap-5 animate-in fade-in duration-200">
@@ -287,29 +385,95 @@ export default function TextToSpeech() {
               {/* Định dạng */}
               <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-control bg-slate-100 dark:bg-[#181C25] text-xs text-slate-700 dark:text-white/70 font-mono border border-slate-200/60 dark:border-transparent">
                 <span className="text-[10px] text-slate-500 dark:text-white/40">Định dạng:</span>
-                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">MP3</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-semibold uppercase">
+                  {outputFormat}
+                </span>
               </div>
             </div>
 
-            {/* Các tiện ích: Ngắt nghỉ, Từ điển, Nút mở Cài đặt mobile */}
+            {/* Các tiện ích: Ngắt nghỉ, Đa giọng, Từ điển, Tạo hàng loạt */}
             <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => insertPause(500)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control hover:bg-slate-100 dark:hover:bg-white/5 text-xs text-slate-700 hover:text-slate-900 dark:text-white/70 dark:hover:text-white transition-colors"
-                title="Chèn dấu ngắt nghỉ tại vị trí con trỏ"
-              >
-                <PauseCircle className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                <span className="hidden sm:inline">Ngắt nghỉ</span>
-              </button>
+              {/* Nút Ngắt nghỉ */}
+              <div className="relative group">
+                <button
+                  type="button"
+                  onClick={() => insertPause(1000)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control hover:bg-slate-100 dark:hover:bg-white/5 text-xs text-slate-700 hover:text-slate-900 dark:text-white/70 dark:hover:text-white transition-colors"
+                  title="Chèn dấu ngắt nghỉ [pause 1s]"
+                >
+                  <PauseCircle className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span className="hidden sm:inline">Ngắt nghỉ (1s)</span>
+                </button>
+              </div>
 
+              {/* Nút Đa giọng */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsMultiVoiceMenuOpen(!isMultiVoiceMenuOpen)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control hover:bg-slate-100 dark:hover:bg-white/5 text-xs text-slate-700 hover:text-slate-900 dark:text-white/70 dark:hover:text-white transition-colors"
+                  title="Chèn thẻ chuyển giọng đọc trong kịch bản"
+                >
+                  <Users className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                  <span className="hidden sm:inline">Đa giọng</span>
+                </button>
+
+                {isMultiVoiceMenuOpen && (
+                  <div className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-[#181C25] border border-slate-200 dark:border-white/[0.1] rounded-control shadow-xl p-1 z-30">
+                    <div className="p-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-white/[0.06]">
+                      Chọn giọng chèn
+                    </div>
+                    <div className="max-h-48 overflow-y-auto py-1 space-y-0.5">
+                      {voices.map((v) => (
+                        <button
+                          key={v.id}
+                          onClick={() => insertVoiceTag(v.id)}
+                          className="w-full text-left px-2.5 py-1.5 rounded text-xs text-slate-800 dark:text-white/90 hover:bg-indigo-50 dark:hover:bg-white/5 transition-colors flex items-center justify-between"
+                        >
+                          <span className="truncate">{v.name}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {v.gender === 'Female' ? 'Nữ' : 'Nam'}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Nút Từ điển */}
               <button
-                onClick={() => toast.info('Tính năng Từ điển phát âm sẽ ra mắt ở phiên bản tiếp theo.')}
+                type="button"
+                onClick={() => setIsDictionaryModalOpen(true)}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control hover:bg-slate-100 dark:hover:bg-white/5 text-xs text-slate-700 hover:text-slate-900 dark:text-white/70 dark:hover:text-white transition-colors"
-                title="Từ điển phát âm"
+                title="Từ điển phát âm cá nhân"
               >
                 <BookA className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                 <span className="hidden sm:inline">Từ điển</span>
               </button>
+
+              {/* Nút Tạo hàng loạt (Batch) */}
+              <button
+                type="button"
+                onClick={() => setIsBatchModalOpen(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control hover:bg-slate-100 dark:hover:bg-white/5 text-xs text-slate-700 hover:text-slate-900 dark:text-white/70 dark:hover:text-white transition-colors"
+                title="Tải file .txt/.docx/.srt và tạo hàng loạt"
+              >
+                <Layers className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span className="hidden sm:inline">Tạo hàng loạt</span>
+              </button>
+
+              {/* Nút Xóa văn bản */}
+              {text.trim() && (
+                <button
+                  type="button"
+                  onClick={handleClearText}
+                  className="p-1.5 rounded-control text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                  title="Xóa nội dung"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
 
               {/* Nút mở Settings panel trên tablet/mobile */}
               <button
@@ -328,7 +492,7 @@ export default function TextToSpeech() {
               ref={textareaRef}
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Nhập hoặc dán nội dung văn bản tiếng Việt bạn muốn chuyển đổi thành giọng đọc tự nhiên tại đây..."
+              placeholder="Nhập hoặc dán nội dung văn bản tiếng Việt bạn muốn chuyển đổi thành giọng đọc tự nhiên tại đây... (Hỗ trợ cú pháp [pause 1s] hoặc [Voice: TênGiọng])"
               rows={8}
               className="w-full bg-transparent text-sm sm:text-base leading-relaxed text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 focus:outline-none resize-none font-sans"
             />
@@ -358,13 +522,46 @@ export default function TextToSpeech() {
             )}
           </div>
 
-          {/* 3. Thanh hành động cố định phía dưới */}
+          {/* 3. Thanh tiến độ khi Job đang xử lý */}
+          {isJobRunning && (
+            <div className="px-4 py-3 bg-indigo-50/80 dark:bg-indigo-950/30 border-t border-indigo-100 dark:border-indigo-500/20 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-semibold">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600 dark:text-indigo-400" />
+                  <span>Đang tổng hợp giọng nói qua worker nền...</span>
+                </div>
+                <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                  {jobProgress}%
+                </span>
+              </div>
+              <div className="w-full bg-slate-200 dark:bg-white/10 rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-indigo-500 to-purple-600 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${jobProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Thông báo lỗi nếu Job thất bại */}
+          {jobError && (
+            <div className="px-4 py-2.5 bg-rose-50 dark:bg-rose-500/10 border-t border-rose-200 dark:border-rose-500/20 flex items-center justify-between text-xs text-rose-700 dark:text-rose-400">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{jobError} (Credit đã được hoàn lại đầy đủ vào tài khoản).</span>
+              </div>
+            </div>
+          )}
+
+          {/* 4. Thanh hành động cố định phía dưới */}
           <div className="p-3.5 border-t border-slate-200 dark:border-white/[0.08] bg-slate-50/70 dark:bg-[#0B0D12]/70 flex flex-wrap items-center justify-between gap-3">
             {/* Đếm ký tự & Credit ước tính */}
             <div className="flex items-center gap-3 text-xs">
               {/* Đếm ký tự */}
               <div className="font-mono text-slate-500 dark:text-white/50">
-                <span className="text-slate-900 dark:text-white font-semibold">{text.length.toLocaleString('vi-VN')}</span>
+                <span className="text-slate-900 dark:text-white font-semibold">
+                  {text.length.toLocaleString('vi-VN')}
+                </span>
                 <span> / {config.max_chars?.toLocaleString('vi-VN') || '20.000'} ký tự</span>
               </div>
 
@@ -405,22 +602,26 @@ export default function TextToSpeech() {
                 </Link>
               )}
 
-              {/* Nút Nghe thử */}
+              {/* Nút Nghe thử (200 ký tự) */}
               <button
                 type="button"
-                onClick={() => handleSynthesize(true)}
-                disabled={isLoading || !text.trim()}
+                onClick={handlePreview}
+                disabled={isPreviewLoading || isJobRunning || !text.trim()}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-control bg-white hover:bg-slate-50 dark:bg-transparent dark:hover:bg-white/5 border border-slate-200 dark:border-white/[0.1] hover:border-slate-300 dark:hover:border-white/[0.2] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold text-slate-700 dark:text-white transition-all shadow-xs"
               >
-                <Play className="w-3.5 h-3.5" />
+                {isPreviewLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Play className="w-3.5 h-3.5" />
+                )}
                 <span>Nghe thử (200 ký tự)</span>
               </button>
 
               {/* Nút Tạo giọng nói chính: Gradient Chàm -> Tím */}
               <button
                 type="button"
-                onClick={() => handleSynthesize(false)}
-                disabled={isLoading || !text.trim() || isInsufficient}
+                onClick={handleGenerateJob}
+                disabled={isJobRunning || isPreviewLoading || !text.trim() || isInsufficient}
                 className="flex items-center gap-2 px-5 py-2 rounded-control bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold shadow-lg shadow-indigo-600/25 transition-all"
                 title={
                   isInsufficient
@@ -428,10 +629,10 @@ export default function TextToSpeech() {
                     : 'Phím tắt: ⌘+Enter / Ctrl+Enter'
                 }
               >
-                {isLoading ? (
+                {isJobRunning ? (
                   <>
-                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Đang tổng hợp...</span>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Đang xử lý {jobProgress}%</span>
                   </>
                 ) : (
                   <>
@@ -447,25 +648,28 @@ export default function TextToSpeech() {
           </div>
         </div>
 
-        {/* Audio Player hiển thị ngay khi tạo xong */}
+        {/* Audio Player hiển thị khi có audio */}
         {activeUrl && (
           <AudioPlayer
             url={activeUrl}
             voiceName={activeVoiceName}
             isPreview={activeIsPreview}
-            onDownload={() => handleDownload(activeUrl, selectedVoiceId)}
+            duration={activeDuration}
+            format={activeFormat}
+            srtUrl={activeSrtUrl}
+            vttUrl={activeVttUrl}
           />
         )}
 
-        {/* 4. Bảng "Danh sách chuyển đổi" bên dưới */}
+        {/* 5. Bảng "Danh sách chuyển đổi" bên dưới */}
         <div className="rounded-card bg-white dark:bg-[#12151C] border border-slate-200 dark:border-white/[0.08] shadow-xs p-4 sm:p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Danh sách chuyển đổi
+                Danh sách chuyển đổi gần đây
               </h3>
               <p className="text-[11px] text-slate-500 dark:text-white/40">
-                Toàn bộ các bản ghi giọng nói đã thực hiện trong phiên làm việc
+                Toàn bộ các bản ghi giọng nói và tác vụ nền đã xử lý
               </p>
             </div>
 
@@ -483,11 +687,12 @@ export default function TextToSpeech() {
               </div>
 
               <button
-                onClick={() => toast.info('Đã làm mới danh sách')}
-                className="p-1.5 rounded-control text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-white/40 dark:hover:text-white dark:hover:bg-white/5 border border-slate-200 dark:border-white/[0.08]"
+                onClick={fetchRecentJobs}
+                disabled={isFetchingRecentJobs}
+                className="p-1.5 rounded-control text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-white/40 dark:hover:text-white dark:hover:bg-white/5 border border-slate-200 dark:border-white/[0.08] disabled:opacity-50"
                 title="Làm mới"
               >
-                <RefreshCw className="w-3.5 h-3.5" />
+                <RefreshCw className={`w-3.5 h-3.5 ${isFetchingRecentJobs ? 'animate-spin' : ''}`} />
               </button>
             </div>
           </div>
@@ -503,7 +708,7 @@ export default function TextToSpeech() {
                       className="rounded accent-indigo-600 cursor-pointer"
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setSelectedTableRows(history.map((h) => h.id))
+                          setSelectedTableRows(recentJobs.map((j) => j.id.toString()))
                         } else {
                           setSelectedTableRows([])
                         }
@@ -512,27 +717,30 @@ export default function TextToSpeech() {
                   </th>
                   <th className="py-2.5 px-3">Nội dung</th>
                   <th className="py-2.5 px-3">Giọng đọc</th>
-                  <th className="py-2.5 px-3">Ký tự</th>
+                  <th className="py-2.5 px-3">Thời lượng</th>
                   <th className="py-2.5 px-3">Credit</th>
                   <th className="py-2.5 px-3">Định dạng</th>
-                  <th className="py-2.5 px-3">Thời gian</th>
+                  <th className="py-2.5 px-3">Trạng thái</th>
                   <th className="py-2.5 px-3 text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                {history.length === 0 ? (
+                {recentJobs.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-8 text-center text-slate-400 dark:text-white/30">
                       Chưa có bản ghi âm nào được tạo. Hãy nhập văn bản và bấm "Tạo giọng nói"!
                     </td>
                   </tr>
                 ) : (
-                  history
+                  recentJobs
                     .filter((item) =>
                       tableSearch ? item.text.toLowerCase().includes(tableSearch.toLowerCase()) : true
                     )
                     .map((item) => {
-                      const isChecked = selectedTableRows.includes(item.id)
+                      const isChecked = selectedTableRows.includes(item.id.toString())
+                      const itemVoice = voices.find((v) => v.id === item.voice)?.name || item.voice
+                      const isItemDone = item.status === 'done'
+
                       return (
                         <tr
                           key={item.id}
@@ -544,48 +752,89 @@ export default function TextToSpeech() {
                               checked={isChecked}
                               onChange={() => {
                                 setSelectedTableRows((prev) =>
-                                  prev.includes(item.id)
-                                    ? prev.filter((id) => id !== item.id)
-                                    : [...prev, item.id]
+                                  prev.includes(item.id.toString())
+                                    ? prev.filter((id) => id !== item.id.toString())
+                                    : [...prev, item.id.toString()]
                                 )
                               }}
                               className="rounded accent-indigo-600 cursor-pointer"
                             />
                           </td>
                           <td className="py-3 px-3 max-w-[220px]">
-                            <p className="font-semibold text-slate-900 dark:text-white truncate" title={item.text}>
+                            <p
+                              className="font-semibold text-slate-900 dark:text-white truncate cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400"
+                              title={item.text}
+                              onClick={() => isItemDone && handleReplayJob(item)}
+                            >
                               {item.text}
                             </p>
                           </td>
                           <td className="py-3 px-3">
-                            <span className="text-slate-700 dark:text-white/80">{item.voiceName}</span>
+                            <span className="text-slate-700 dark:text-white/80">{itemVoice}</span>
                           </td>
                           <td className="py-3 px-3 font-mono text-slate-600 dark:text-white/60">
-                            {item.text.length}
+                            {item.duration ? `${item.duration.toFixed(1)}s` : '--'}
                           </td>
                           <td className="py-3 px-3 font-mono text-[#F59E0B] font-semibold">
-                            {item.isPreview ? '0' : item.text.length}
+                            {item.credit_used ?? item.char_count}
                           </td>
-                          <td className="py-3 px-3 font-mono text-emerald-600 dark:text-emerald-400 font-medium">MP3</td>
-                          <td className="py-3 px-3 text-slate-500 dark:text-white/40 font-mono text-[11px]">
-                            {item.timestamp instanceof Date ? item.timestamp.toLocaleTimeString('vi-VN') : String(item.timestamp)}
+                          <td className="py-3 px-3 font-mono text-emerald-600 dark:text-emerald-400 font-medium uppercase">
+                            {item.format || 'mp3'}
+                          </td>
+                          <td className="py-3 px-3">
+                            {item.status === 'done' && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Hoàn thành
+                              </span>
+                            )}
+                            {item.status === 'processing' && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                {item.progress}%
+                              </span>
+                            )}
+                            {item.status === 'failed' && (
+                              <span
+                                className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full"
+                                title={item.error_message || undefined}
+                              >
+                                <AlertTriangle className="w-3 h-3" />
+                                Lỗi
+                              </span>
+                            )}
                           </td>
                           <td className="py-3 px-3 text-right">
                             <div className="flex items-center justify-end gap-1">
-                              <button
-                                onClick={() => handleReplayItem(item)}
-                                className="p-1.5 rounded-control text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/10"
-                                title="Phát lại & nạp cài đặt"
-                              >
-                                <Play className="w-3.5 h-3.5 fill-current" />
-                              </button>
-                              <button
-                                onClick={() => handleDownload(item.url, item.voiceId)}
-                                className="p-1.5 rounded-control text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/10"
-                                title="Tải về"
-                              >
-                                <Download className="w-3.5 h-3.5" />
-                              </button>
+                              {isItemDone && (
+                                <>
+                                  <button
+                                    onClick={() => handleReplayJob(item)}
+                                    className="p-1.5 rounded-control text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/10"
+                                    title="Phát lại & nạp cài đặt"
+                                  >
+                                    <Play className="w-3.5 h-3.5 fill-current" />
+                                  </button>
+                                  <a
+                                    href={getJobAudioUrl(item.id)}
+                                    download={`voxify_${item.id}.${item.format || 'mp3'}`}
+                                    className="p-1.5 rounded-control text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/10"
+                                    title="Tải về audio"
+                                  >
+                                    <Download className="w-3.5 h-3.5" />
+                                  </a>
+                                  {item.srt_url && (
+                                    <a
+                                      href={getJobSubtitleUrl(item.id, 'srt')}
+                                      download={`voxify_${item.id}.srt`}
+                                      className="p-1.5 rounded-control text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/10 font-mono text-[10px]"
+                                      title="Tải phụ đề SRT"
+                                    >
+                                      <FileText className="w-3.5 h-3.5 text-indigo-500" />
+                                    </a>
+                                  )}
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -631,7 +880,7 @@ export default function TextToSpeech() {
                 }`}
               >
                 <History className="w-3 h-3" />
-                <span>Lịch sử ({history.length})</span>
+                <span>Lịch sử ({recentJobs.length})</span>
               </button>
             </div>
           ) : (
@@ -731,20 +980,73 @@ export default function TextToSpeech() {
                   />
                 </div>
 
-                {/* 3. Định dạng đầu ra */}
-                <div className="pt-2 border-t border-slate-100 dark:border-white/[0.06] space-y-2">
+                {/* 3. Định dạng đầu ra (MP3 vs WAV) */}
+                <div className="pt-2 border-t border-slate-100 dark:border-white/[0.06] space-y-2.5">
                   <label className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider block">
                     Định dạng đầu ra
                   </label>
-                  <div className="p-3 rounded-control bg-slate-50 dark:bg-[#181C25] border border-slate-200 dark:border-white/[0.08] flex items-center justify-between text-xs">
-                    <div>
-                      <p className="font-semibold text-slate-900 dark:text-white">Audio MP3</p>
-                      <p className="text-[10px] text-slate-500 dark:text-white/40">24kHz &middot; Mono &middot; 48kbps</p>
-                    </div>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
-                      Chuẩn
-                    </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setOutputFormat('mp3')}
+                      className={`p-2.5 rounded-control border text-left transition-all ${
+                        outputFormat === 'mp3'
+                          ? 'border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold'
+                          : 'border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#181C25] text-slate-700 dark:text-white/70'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs">Audio MP3</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 font-bold">
+                          Chuẩn
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-white/40 mt-1">
+                        24kHz &middot; 48kbps
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setOutputFormat('wav')}
+                      className={`p-2.5 rounded-control border text-left transition-all ${
+                        outputFormat === 'wav'
+                          ? 'border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold'
+                          : 'border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#181C25] text-slate-700 dark:text-white/70'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs">Audio WAV</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-purple-500/10 text-purple-600 font-bold">
+                          Lossless
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-white/40 mt-1">
+                        24kHz &middot; 16-bit PCM
+                      </p>
+                    </button>
                   </div>
+                </div>
+
+                {/* 4. Tuỳ chọn Từ điển phát âm */}
+                <div className="pt-2 border-t border-slate-100 dark:border-white/[0.06] flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-800 dark:text-white">
+                      Áp dụng từ điển phát âm
+                    </p>
+                    <p className="text-[10px] text-slate-500 dark:text-white/40">
+                      Tự động thay thế từ viết tắt, tên riêng
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={applyDictionary}
+                      onChange={(e) => setApplyDictionary(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-white/10 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                  </label>
                 </div>
               </div>
             ) : (
@@ -754,33 +1056,33 @@ export default function TextToSpeech() {
                   <span className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider">
                     Các bản ghi gần đây
                   </span>
-                  {history.length > 0 && (
+                  {recentJobs.length > 0 && (
                     <button
-                      onClick={clearHistory}
-                      className="text-[11px] text-red-500 hover:text-red-600 dark:text-red-400 font-medium"
+                      onClick={fetchRecentJobs}
+                      className="text-[11px] text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 font-medium"
                     >
-                      Xóa tất cả
+                      Làm mới
                     </button>
                   )}
                 </div>
 
-                {history.length === 0 ? (
+                {recentJobs.length === 0 ? (
                   <p className="text-xs text-slate-400 dark:text-white/40 text-center py-8">
-                    Chưa có bản ghi nào trong phiên hiện tại.
+                    Chưa có bản ghi nào trong lịch sử gần đây.
                   </p>
                 ) : (
-                  history.map((item) => (
+                  recentJobs.map((item) => (
                     <div
                       key={item.id}
-                      onClick={() => handleReplayItem(item)}
+                      onClick={() => item.status === 'done' && handleReplayJob(item)}
                       className="p-3 rounded-control bg-slate-50 hover:bg-slate-100 dark:bg-[#181C25] dark:hover:bg-[#1e232f] border border-slate-200 dark:border-white/[0.06] cursor-pointer transition-colors space-y-2 group"
                     >
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="font-semibold text-slate-900 dark:text-white/90 truncate max-w-[180px]">
-                          {item.voiceName}
+                          {voices.find((v) => v.id === item.voice)?.name || item.voice}
                         </span>
                         <span className="text-slate-500 dark:text-white/40 font-mono text-[10px]">
-                          {item.timestamp instanceof Date ? item.timestamp.toLocaleTimeString('vi-VN') : String(item.timestamp)}
+                          {item.duration ? `${item.duration.toFixed(1)}s` : '--'}
                         </span>
                       </div>
                       <p className="text-xs text-slate-600 dark:text-white/60 line-clamp-2 leading-relaxed">
@@ -866,6 +1168,24 @@ export default function TextToSpeech() {
         onPreviewSample={(id) => {
           toast.info(`Đang nghe thử giọng ${voices.find((v) => v.id === id)?.name || id}`)
         }}
+      />
+
+      {/* Dictionary Modal */}
+      <DictionaryModal
+        isOpen={isDictionaryModalOpen}
+        onClose={() => setIsDictionaryModalOpen(false)}
+      />
+
+      {/* Batch TTS Modal */}
+      <BatchModal
+        isOpen={isBatchModalOpen}
+        onClose={() => setIsBatchModalOpen(false)}
+        defaultVoice={selectedVoiceId || 'vi-VN-HoaiMyNeural'}
+        defaultRate={rateStr}
+        defaultPitch={pitchStr}
+        defaultVolume={volumeStr}
+        selectedFormat={outputFormat}
+        applyDictionary={applyDictionary}
       />
     </div>
   )
