@@ -14,7 +14,16 @@ from app.core.logging import setup_logging
 from app.db import create_tables
 from app.dependencies import get_current_active_user, get_tts_service
 from app.models.user import User
-from app.routes import auth_router, config_router, credit_router, dictionary_router, history_router, tts_router, voices_router
+from app.routes import (
+    auth_router,
+    config_router,
+    credit_router,
+    dashboard_router,
+    dictionary_router,
+    history_router,
+    tts_router,
+    voices_router,
+)
 from app.routes.history import cleanup_old_generations
 from app.schemas.auth import UserOut
 
@@ -92,6 +101,7 @@ app.include_router(dictionary_router)
 app.include_router(voices_router)
 app.include_router(tts_router)
 app.include_router(history_router)
+app.include_router(dashboard_router)
 
 
 @app.get("/api/me", response_model=UserOut, summary="Lấy thông tin người dùng hiện tại (alias)")
