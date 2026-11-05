@@ -818,9 +818,10 @@ class PaymentService:
         db: AsyncSession,
         order_id: int,
         user_id: int,
-    ) -> Dict[str, object]:
+    ) -> Tuple[str, str, int]:
         """
         Gửi lại mã OTP xác thực thẻ (gia hạn thời gian 180s).
+        Trả về: (message, phone_hint, expires_in)
         """
         order = await cls.get_order_by_id_or_code(db, order_id)
         if not order:
@@ -844,10 +845,6 @@ class PaymentService:
         order.updated_at = datetime.now(UTC)
         await db.commit()
 
-        phone_hint = meta.get("phone_hint", "******899")
-        return {
-            "success": True,
-            "message": "Đã gửi lại mã xác thực 3D-Secure OTP mới đến điện thoại của bạn.",
-            "phone_hint": phone_hint,
-            "expires_in": expires_in,
-        }
+        phone_hint = str(meta.get("phone_hint") or "******899")
+        message = "Đã gửi lại mã xác thực 3D-Secure OTP mới đến điện thoại của bạn."
+        return message, phone_hint, expires_in

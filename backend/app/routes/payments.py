@@ -248,16 +248,16 @@ async def resend_order_card_otp(
     db: AsyncSession = Depends(get_db),
 ):
     """Gửi lại mã OTP xác thực thẻ nếu hết hạn."""
-    res = await PaymentService.resend_card_otp(
+    message, phone_hint, expires_in = await PaymentService.resend_card_otp(
         db=db,
         order_id=order_id,
         user_id=current_user.id,
     )
     return ResendOtpResponse(
-        success=bool(res.get("success", True)),
-        message=str(res.get("message", "Đã gửi lại mã OTP.")),
-        phone_hint=str(res.get("phone_hint", "******899")),
-        expires_in=int(res.get("expires_in", 180)),
+        success=True,
+        message=message,
+        phone_hint=phone_hint,
+        expires_in=expires_in,
     )
 
 
