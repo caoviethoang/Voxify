@@ -113,3 +113,7 @@ async def get_optional_current_user(
         return await get_current_user(request, credentials, db)
     except HTTPException:
         return None
+
+
+# Alias
+get_current_admin_user = require_admin

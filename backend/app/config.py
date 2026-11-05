@@ -66,6 +66,21 @@ class Settings(BaseSettings):
         "elevenlabs": 2.0,
     }
 
+    # Cổng thanh toán & VietQR
+    vietqr_bank_id: str = "MB"  # Mã ngân hàng (MB, VCB, TCB, ACB, ...)
+    vietqr_account_no: str = "0333888999"
+    vietqr_account_name: str = "VOXIFY AI STUDIO"
+    vietqr_template: str = "compact2"
+
+    # PayOS (Cổng thanh toán tự động VietQR)
+    payos_client_id: str = ""
+    payos_api_key: str = ""
+    payos_checksum_key: str = ""
+
+    # Stripe (Thanh toán quốc tế)
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+
     @field_validator("debug", mode="before")
     @classmethod
     def parse_debug(cls, v: Any) -> bool:

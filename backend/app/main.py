@@ -21,6 +21,7 @@ from app.routes import (
     dashboard_router,
     dictionary_router,
     history_router,
+    payment_router,
     tts_router,
     voices_router,
 )
@@ -63,6 +64,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Chưa thể warmup danh sách giọng đọc: {e}")
 
+    # Khởi tạo gói dịch vụ và mã giảm giá mặc định
+    try:
+        from app.db import AsyncSessionLocal
+        from app.services.payment_service import PaymentService
+        async with AsyncSessionLocal() as payment_session:
+            await PaymentService.seed_defaults_if_empty(payment_session)
+    except Exception as e:
+        logger.warning(f"Không thể khởi tạo gói cước mặc định: {e}")
+
     port = settings.port
     print("\n" + "=" * 60)
     print(f"  🚀 {settings.app_name} đang hoạt động!")
@@ -101,6 +111,7 @@ app.include_router(dictionary_router)
 app.include_router(voices_router)
 app.include_router(tts_router)
 app.include_router(history_router)
+app.include_router(payment_router)
 app.include_router(dashboard_router)
 
 
