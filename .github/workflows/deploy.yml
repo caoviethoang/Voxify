@@ -89,3 +89,4 @@ jobs:
         run: |
           echo "::error::Health check failed! Triggering automatic rollback to previous stable tag..."
           # Rollback logic / alerts
+

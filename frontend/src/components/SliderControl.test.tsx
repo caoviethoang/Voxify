@@ -67,3 +67,4 @@ describe('SliderControl Component', () => {
     expect(slider).toHaveAttribute('step', '10')
   })
 })
+

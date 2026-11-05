@@ -147,3 +147,4 @@ Tự động kích hoạt khi có Pull Request hoặc Push vào nhánh `main` v�
 - Đẩy Docker Images lên GitHub Container Registry (`ghcr.io`).
 - Triển khai và xác thực sức khỏe hệ sinh thái với endpoint `/health`.
 - Tự động cảnh báo và kích hoạt rollback nếu healthcheck thất bại.
+
