@@ -81,5 +81,6 @@ async def create_tables() -> None:
                         sync_conn.execute(text("ALTER TABLE generations ADD COLUMN vtt_path VARCHAR(500)"))
                     if "updated_at" not in gen_cols:
                         sync_conn.execute(text("ALTER TABLE generations ADD COLUMN updated_at TIMESTAMP"))
+                        sync_conn.execute(text("UPDATE generations SET updated_at = created_at WHERE updated_at IS NULL"))
 
             await conn.run_sync(_sync_sqlite_columns)

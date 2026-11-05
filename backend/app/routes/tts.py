@@ -51,7 +51,7 @@ def _to_job_response(gen: Generation) -> TTSJobResponse:
         srt_url=f"/api/tts/jobs/{gen.id}/subtitles?format=srt" if has_srt else None,
         vtt_url=f"/api/tts/jobs/{gen.id}/subtitles?format=vtt" if has_vtt else None,
         created_at=gen.created_at,
-        updated_at=gen.updated_at,
+        updated_at=gen.updated_at or gen.created_at,
     )
 
 
