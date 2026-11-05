@@ -285,6 +285,8 @@ function AudioPlayerRow({ audioUrl }: { audioUrl: string }) {
     audio.currentTime = Number(e.target.value)
   }
 
+  const progressPercent = duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0
+
   return (
     <div className="flex items-center gap-3 py-2 px-1">
       <audio
@@ -307,9 +309,11 @@ function AudioPlayerRow({ audioUrl }: { audioUrl: string }) {
         type="range"
         min={0}
         max={duration || 100}
+        step={0.1}
         value={currentTime}
         onChange={handleSeek}
-        className="flex-1 h-1 accent-indigo-600 cursor-pointer"
+        style={{ '--val': `${progressPercent}%` } as React.CSSProperties}
+        className="flex-1 h-1 rounded-lg appearance-none cursor-pointer accent-indigo-600"
       />
       <span className="text-[11px] font-mono text-slate-500 dark:text-white/40 shrink-0">
         {formatDuration(currentTime)} / {formatDuration(duration)}
