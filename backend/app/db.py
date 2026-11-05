@@ -61,4 +61,26 @@ async def create_tables() -> None:
                     if "ref_id" not in tx_cols:
                         sync_conn.execute(text("ALTER TABLE credit_transactions ADD COLUMN ref_id VARCHAR(100)"))
 
+                gen_cols = [r[1] for r in sync_conn.execute(text("PRAGMA table_info(generations)")).fetchall()]
+                if gen_cols:
+                    if "status" not in gen_cols:
+                        sync_conn.execute(text("ALTER TABLE generations ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'done'"))
+                    if "progress" not in gen_cols:
+                        sync_conn.execute(text("ALTER TABLE generations ADD COLUMN progress INTEGER NOT NULL DEFAULT 100"))
+                    if "duration" not in gen_cols:
+                        sync_conn.execute(text("ALTER TABLE generations ADD COLUMN duration REAL NOT NULL DEFAULT 0.0"))
+                    if "format" not in gen_cols:
+                        sync_conn.execute(text("ALTER TABLE generations ADD COLUMN format VARCHAR(10) NOT NULL DEFAULT 'mp3'"))
+                    if "credit_used" not in gen_cols:
+                        sync_conn.execute(text("ALTER TABLE generations ADD COLUMN credit_used INTEGER NOT NULL DEFAULT 0"))
+                    if "error_message" not in gen_cols:
+                        sync_conn.execute(text("ALTER TABLE generations ADD COLUMN error_message TEXT"))
+                    if "srt_path" not in gen_cols:
+                        sync_conn.execute(text("ALTER TABLE generations ADD COLUMN srt_path VARCHAR(500)"))
+                    if "vtt_path" not in gen_cols:
+                        sync_conn.execute(text("ALTER TABLE generations ADD COLUMN vtt_path VARCHAR(500)"))
+                    if "updated_at" not in gen_cols:
+                        sync_conn.execute(text("ALTER TABLE generations ADD COLUMN updated_at TIMESTAMP"))
+                        sync_conn.execute(text("UPDATE generations SET updated_at = created_at WHERE updated_at IS NULL"))
+
             await conn.run_sync(_sync_sqlite_columns)

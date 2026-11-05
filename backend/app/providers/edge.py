@@ -122,15 +122,17 @@ class EdgeTTSProvider(TTSProvider):
 
         for attempt in range(1, max_retries + 1):
             try:
-                # Nếu lần thử cuối cùng vẫn thất bại do giọng đặc thù (như HoaiMy), thử fallback giọng cùng ngôn ngữ
-                if attempt == max_retries:
+                current_chunk = chunk
+                # Nếu gặp lỗi ở lần thử đầu, chuẩn hóa dấu câu và thử giọng fallback tương thích
+                if attempt >= 2:
+                    current_chunk = re.sub(r'[!¡]+', '.', current_chunk)
                     if voice == "vi-VN-HoaiMyNeural":
                         target_voice = "vi-VN-NamMinhNeural"
                     elif voice == "vi-VN-NamMinhNeural":
                         target_voice = "vi-VN-HoaiMyNeural"
 
                 communicate = edge_tts.Communicate(
-                    text=chunk,
+                    text=current_chunk,
                     voice=target_voice,
                     rate=rate,
                     pitch=pitch,

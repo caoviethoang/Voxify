@@ -43,6 +43,9 @@ class User(Base):
     credit_transactions: Mapped[list["CreditTransaction"]] = relationship(
         "CreditTransaction", back_populates="user", lazy="select", cascade="all, delete-orphan"
     )
+    pronunciation_rules: Mapped[list["PronunciationDictionary"]] = relationship(
+        "PronunciationDictionary", back_populates="user", lazy="select", cascade="all, delete-orphan"
+    )
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
         "RefreshToken", back_populates="user", cascade="all, delete-orphan", lazy="select"
     )
