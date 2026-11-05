@@ -49,6 +49,41 @@ Trân trọng,
     _send_email_or_log(to_email, subject, body_text, verify_url, "VERIFY EMAIL LINK")
 
 
+def send_payment_confirmation_email(
+    to_email: str,
+    order_code: str,
+    plan_name: str,
+    amount: int,
+    credits: int,
+    payment_method: str,
+) -> None:
+    """Gửi email xác nhận thanh toán thành công."""
+    settings = get_settings()
+    order_url = f"{settings.frontend_url}/pricing?tab=orders"
+
+    subject = f"[{settings.app_name}] Xác nhận thanh toán thành công #{order_code}"
+    body_text = f"""Xin chào,
+
+Chúng tôi xin thông báo đơn hàng của bạn đã được thanh toán thành công!
+
+Chi tiết đơn hàng:
+- Mã đơn hàng: #{order_code}
+- Dịch vụ / Gói: {plan_name}
+- Số tiền thanh toán: {amount:,} VND
+- Phương thức thanh toán: {payment_method.upper()}
+- Số credit đã cộng vào tài khoản: +{credits:,} credits
+
+Bạn có thể đăng nhập vào {settings.app_name} để kiểm tra số dư và bắt đầu tạo giọng đọc AI ngay bây giờ.
+Chi tiết hóa đơn và đơn hàng: {order_url}
+
+Cảm ơn bạn đã tin tưởng và đồng hành cùng {settings.app_name}!
+
+Trân trọng,
+Đội ngũ {settings.app_name}
+"""
+    _send_email_or_log(to_email, subject, body_text, order_url, "PAYMENT CONFIRMATION")
+
+
 def _send_email_or_log(
     to_email: str, subject: str, body: str, action_url: str, log_tag: str
 ) -> None:

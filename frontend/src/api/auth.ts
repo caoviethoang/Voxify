@@ -8,6 +8,7 @@ export interface User {
   is_active: boolean
   is_verified: boolean
   credits: number
+  credit_balance?: number
   created_at: string
 }
 

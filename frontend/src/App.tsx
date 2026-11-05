@@ -9,6 +9,7 @@ import TextToSpeech from './pages/TextToSpeech'
 import VoiceLibrary from './pages/VoiceLibrary'
 import CreditHistory from './pages/CreditHistory'
 import History from './pages/History'
+import Pricing from './pages/Pricing'
 import PlaceholderPage from './pages/PlaceholderPage'
 import Profile from './pages/Profile'
 import NotFound from './pages/NotFound'
@@ -60,15 +61,7 @@ export default function App() {
 
               {/* Các trang công cụ, lịch sử, mở rộng */}
               <Route path="/history" element={<History />} />
-              <Route
-                path="/pricing"
-                element={
-                  <PlaceholderPage
-                    title="Gói Cước & Nạp Credit"
-                    subtitle="Lựa chọn các gói cước linh hoạt phù hợp với nhu cầu sáng tạo không giới hạn của bạn."
-                  />
-                }
-              />
+              <Route path="/pricing" element={<Pricing />} />
               <Route
                 path="/affiliate"
                 element={
