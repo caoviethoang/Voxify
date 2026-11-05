@@ -10,3 +10,4 @@ def setup_test_database():
     loop = asyncio.new_event_loop()
     loop.run_until_complete(create_tables())
     loop.close()
+

@@ -40,11 +40,13 @@ export function useTTSJob() {
           stopPolling()
           setIsJobRunning(false)
           setJobError(null)
+          localStorage.removeItem(ACTIVE_JOB_KEY)
           refreshUser()
         } else if (job.status === 'failed') {
           stopPolling()
           setIsJobRunning(false)
           setJobError(job.error_message || 'Tạo giọng nói thất bại.')
+          localStorage.removeItem(ACTIVE_JOB_KEY)
           refreshUser()
         }
       } catch (err: unknown) {
@@ -108,8 +110,11 @@ export function useTTSJob() {
               pollingRef.current = setInterval(() => {
                 pollJobStatus(jobId)
               }, 800)
-            } else if (job.status === 'failed') {
-              setJobError(job.error_message || 'Tác vụ đã thất bại.')
+            } else {
+              localStorage.removeItem(ACTIVE_JOB_KEY)
+              if (job.status === 'failed') {
+                setJobError(job.error_message || 'Tác vụ đã thất bại.')
+              }
             }
           })
           .catch(() => {

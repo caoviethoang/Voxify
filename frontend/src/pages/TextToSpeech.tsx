@@ -189,9 +189,11 @@ export default function TextToSpeech() {
   const pitchStr = `${pitch >= 0 ? '+' : ''}${pitch}Hz`
   const volumeStr = `${volume >= 0 ? '+' : ''}${volume}%`
 
+  const userId = user?.id
+
   // Tải danh sách recent jobs từ backend
   const fetchRecentJobs = useCallback(async () => {
-    if (!user) return
+    if (!userId) return
     setIsFetchingRecentJobs(true)
     try {
       const data = await listRecentJobs(20)
@@ -201,22 +203,29 @@ export default function TextToSpeech() {
     } finally {
       setIsFetchingRecentJobs(false)
     }
-  }, [user])
+  }, [userId])
 
   useEffect(() => {
-    if (user) {
+    if (userId) {
       fetchRecentJobs()
     }
-  }, [user, fetchRecentJobs])
+  }, [userId, fetchRecentJobs])
 
-  // Khi activeJob hoàn thành, làm mới danh sách job và credit
+  // Theo dõi trạng thái hoàn thành của job hiện tại (chỉ thông báo một lần khi vừa kết thúc xử lý)
+  const wasRunningRef = useRef(false)
+
   useEffect(() => {
-    if (activeJob?.status === 'done') {
-      fetchRecentJobs()
-      refreshUser()
-      toast.success('Đã tạo xong tệp âm thanh chất lượng cao!')
+    if (isJobRunning) {
+      wasRunningRef.current = true
+    } else if (wasRunningRef.current) {
+      wasRunningRef.current = false
+      if (activeJob?.status === 'done') {
+        fetchRecentJobs()
+        refreshUser()
+        toast.success('Đã tạo xong tệp âm thanh chất lượng cao!')
+      }
     }
-  }, [activeJob?.status, fetchRecentJobs, refreshUser, toast])
+  }, [isJobRunning, activeJob?.status, fetchRecentJobs, refreshUser, toast])
 
   // Ước tính số credit tiêu tốn (1 credit = 1 ký tự)
   const estimatedCredits = text.length
