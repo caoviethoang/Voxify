@@ -156,11 +156,43 @@ export interface CardPaymentPayload {
   cardholder_name: string
 }
 
-// 9. Thanh toán trực tiếp bằng thẻ Visa / MasterCard / JCB qua Stripe
+export interface CardPaymentResult {
+  order: Order
+  requires_otp: boolean
+  phone_hint?: string
+  expires_in?: number
+  message?: string
+}
+
+export interface ResendOtpResult {
+  success: boolean
+  message: string
+  phone_hint?: string
+  expires_in: number
+}
+
+// 9. Khởi tạo thanh toán trực tiếp bằng thẻ Visa / MasterCard / JCB qua Stripe 3DS
 export const apiPayWithCard = async (
   orderId: number,
   cardData: CardPaymentPayload
+): Promise<CardPaymentResult> => {
+  const { data } = await client.post<CardPaymentResult>(`/payments/orders/${orderId}/pay-card`, cardData)
+  return data
+}
+
+// 10. Xác thực mã 3D-Secure OTP cho đơn hàng thanh toán thẻ
+export const apiVerifyCardOtp = async (
+  orderId: number,
+  otp: string
 ): Promise<Order> => {
-  const { data } = await client.post<Order>(`/payments/orders/${orderId}/pay-card`, cardData)
+  const { data } = await client.post<Order>(`/payments/orders/${orderId}/verify-otp`, { otp })
+  return data
+}
+
+// 11. Gửi lại mã OTP xác thực thẻ nếu hết hạn
+export const apiResendCardOtp = async (
+  orderId: number
+): Promise<ResendOtpResult> => {
+  const { data } = await client.post<ResendOtpResult>(`/payments/orders/${orderId}/resend-otp`)
   return data
 }

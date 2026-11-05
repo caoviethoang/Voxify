@@ -169,3 +169,23 @@ class CardPaymentRequest(BaseModel):
     exp_year: str = Field(..., min_length=2, max_length=4)
     cvc: str = Field(..., min_length=3, max_length=4)
     cardholder_name: str = Field(..., min_length=2, max_length=100)
+
+
+class CardPaymentResult(BaseModel):
+    order: OrderOut
+    requires_otp: bool = True
+    phone_hint: Optional[str] = "******899"
+    expires_in: int = 180
+    message: Optional[str] = "Ngân hàng phát hành yêu cầu xác thực 3D-Secure. Vui lòng nhập mã OTP."
+
+
+class VerifyOtpRequest(BaseModel):
+    otp: str = Field(..., min_length=4, max_length=8)
+
+
+class ResendOtpResponse(BaseModel):
+    success: bool = True
+    message: str = "Đã gửi lại mã xác thực OTP mới."
+    phone_hint: Optional[str] = "******899"
+    expires_in: int = 180
+

@@ -354,7 +354,7 @@ async def test_card_payment_stripe_flow():
         )
         assert invalid_card_res.status_code == 422
 
-        # 3. Thanh toán thẻ hợp lệ
+        # 3. Khởi tạo thanh toán thẻ hợp lệ -> Yêu cầu 3D-Secure OTP
         valid_card_res = await client.post(
             f"/api/payments/orders/{order['id']}/pay-card",
             headers=auth_headers,
@@ -367,29 +367,52 @@ async def test_card_payment_stripe_flow():
             },
         )
         assert valid_card_res.status_code == 200
-        paid_order = valid_card_res.json()
+        card_init_result = valid_card_res.json()
+        assert card_init_result["requires_otp"] is True
+        assert card_init_result["phone_hint"] is not None
+        assert card_init_result["expires_in"] > 0
+
+        # 4. Kiểm tra tính năng Gửi lại mã OTP (Resend OTP)
+        resend_res = await client.post(
+            f"/api/payments/orders/{order['id']}/resend-otp",
+            headers=auth_headers,
+        )
+        assert resend_res.status_code == 200
+        assert resend_res.json()["success"] is True
+
+        # 5. Xác thực OTP sai -> 400 Bad Request
+        wrong_otp_res = await client.post(
+            f"/api/payments/orders/{order['id']}/verify-otp",
+            headers=auth_headers,
+            json={"otp": "000000"},
+        )
+        assert wrong_otp_res.status_code == 400
+        assert "không chính xác" in wrong_otp_res.json()["error"]["message"]
+
+        # 6. Xác thực OTP đúng (123456) -> Hoàn tất thanh toán & cộng credit
+        verify_res = await client.post(
+            f"/api/payments/orders/{order['id']}/verify-otp",
+            headers=auth_headers,
+            json={"otp": "123456"},
+        )
+        assert verify_res.status_code == 200
+        paid_order = verify_res.json()
         assert paid_order["status"] == "paid"
         assert paid_order["paid_at"] is not None
 
-        # 4. Kiểm tra số dư credit của user đã được cộng
+        # 7. Kiểm tra số dư credit của user đã được cộng chính xác
         me_res = await client.get("/api/me", headers=auth_headers)
         assert me_res.status_code == 200
         assert me_res.json()["credit_balance"] == initial_balance + pack["credits"]
 
-        # 5. Thanh toán lại lần 2 đơn đã trả tiền -> Idempotent, giữ nguyên status paid và không cộng trùng
-        repeat_card_res = await client.post(
-            f"/api/payments/orders/{order['id']}/pay-card",
+        # 8. Xác thực lại lần 2 đơn đã trả tiền -> Idempotent, giữ nguyên status paid và không cộng trùng
+        repeat_otp_res = await client.post(
+            f"/api/payments/orders/{order['id']}/verify-otp",
             headers=auth_headers,
-            json={
-                "card_number": "4242424242424242",
-                "cardholder_name": "TEST USER",
-                "exp_month": "12",
-                "exp_year": "28",
-                "cvc": "123",
-            },
+            json={"otp": "123456"},
         )
-        assert repeat_card_res.status_code == 200
-        assert repeat_card_res.json()["status"] == "paid"
+        assert repeat_otp_res.status_code == 200
+        assert repeat_otp_res.json()["status"] == "paid"
 
         me_res2 = await client.get("/api/me", headers=auth_headers)
         assert me_res2.json()["credit_balance"] == initial_balance + pack["credits"]

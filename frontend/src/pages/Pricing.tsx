@@ -33,6 +33,8 @@ import {
   apiDownloadReceipt,
   apiSimulateSandboxPayment,
   apiPayWithCard,
+  apiVerifyCardOtp,
+  apiResendCardOtp,
 } from '../api/payment'
 
 export default function Pricing() {
@@ -75,6 +77,14 @@ export default function Pricing() {
   const [cardExpYear, setCardExpYear] = useState('28')
   const [cardCvc, setCardCvc] = useState('123')
   const [isProcessingCard, setIsProcessingCard] = useState(false)
+
+  // 3D Secure / OTP Challenge State
+  const [isOtpStep, setIsOtpStep] = useState(false)
+  const [otpCode, setOtpCode] = useState('')
+  const [otpPhoneHint, setOtpPhoneHint] = useState('******899')
+  const [otpSecondsLeft, setOtpSecondsLeft] = useState(180)
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false)
+  const [isResendingOtp, setIsResendingOtp] = useState(false)
 
   const couponInputId = useId()
 
@@ -176,6 +186,15 @@ export default function Pricing() {
     const timer = setInterval(updateCountdown, 1000)
     return () => clearInterval(timer)
   }, [activeOrder])
+
+  // Countdown timer for 3D-Secure OTP
+  useEffect(() => {
+    if (!isOtpStep || otpSecondsLeft <= 0) return
+    const timer = setInterval(() => {
+      setOtpSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [isOtpStep, otpSecondsLeft])
 
   // Handle Tab Switch
   const handleSwitchTab = (tab: 'plans' | 'orders') => {
@@ -297,18 +316,27 @@ export default function Pricing() {
     try {
       setIsProcessingCard(true)
       const cleanNum = cardNumber.replace(/\s+/g, '')
-      const updated = await apiPayWithCard(activeOrder.id, {
+      const result = await apiPayWithCard(activeOrder.id, {
         card_number: cleanNum,
         cardholder_name: cardHolder,
         exp_month: cardExpMonth,
         exp_year: cardExpYear,
         cvc: cardCvc,
       })
-      setActiveOrder(updated)
-      await refreshUser()
-      success(
-        `Thanh toán thẻ thành công! Đã cộng +${updated.credits_to_add.toLocaleString()} credit vào tài khoản.`
-      )
+
+      if (result.requires_otp) {
+        setIsOtpStep(true)
+        setOtpCode('')
+        setOtpPhoneHint(result.phone_hint || '******899')
+        setOtpSecondsLeft(result.expires_in || 180)
+        info('Ngân hàng phát hành yêu cầu xác thực 3D-Secure. Vui lòng nhập mã OTP.')
+      } else {
+        setActiveOrder(result.order)
+        await refreshUser()
+        success(
+          `Thanh toán thẻ thành công! Đã cộng +${result.order.credits_to_add.toLocaleString()} credit vào tài khoản.`
+        )
+      }
     } catch (err: unknown) {
       const msg =
         err instanceof Error
@@ -318,6 +346,55 @@ export default function Pricing() {
     } finally {
       setIsProcessingCard(false)
     }
+  }
+
+  // Handle Verify 3D-Secure OTP
+  const handleVerifyOtp = async () => {
+    if (!activeOrder) return
+    if (!otpCode.trim()) {
+      error('Vui lòng nhập mã OTP.')
+      return
+    }
+    try {
+      setIsVerifyingOtp(true)
+      const updated = await apiVerifyCardOtp(activeOrder.id, otpCode.trim())
+      setIsOtpStep(false)
+      setActiveOrder(updated)
+      await refreshUser()
+      success(
+        `Xác thực OTP thành công! Đã cộng +${updated.credits_to_add.toLocaleString()} credit vào tài khoản.`
+      )
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Xác thực OTP không thành công. Vui lòng thử lại.'
+      error(msg)
+    } finally {
+      setIsVerifyingOtp(false)
+    }
+  }
+
+  // Handle Resend OTP
+  const handleResendOtp = async () => {
+    if (!activeOrder) return
+    try {
+      setIsResendingOtp(true)
+      const res = await apiResendCardOtp(activeOrder.id)
+      setOtpSecondsLeft(res.expires_in || 180)
+      if (res.phone_hint) setOtpPhoneHint(res.phone_hint)
+      info(res.message || 'Đã gửi lại mã xác thực OTP.')
+    } catch {
+      error('Không thể gửi lại mã OTP. Vui lòng thử lại sau.')
+    } finally {
+      setIsResendingOtp(false)
+    }
+  }
+
+  // Auto-fill test OTP (123456)
+  const handleFillTestOtp = () => {
+    setOtpCode('123456')
+    info('Đã điền mã OTP Test (123456).')
   }
 
   // Auto-fill test card details for sandbox testing
@@ -1128,13 +1205,17 @@ export default function Pricing() {
                       <Clock className="w-3 h-3 animate-spin" />
                       <span>
                         {activeOrder.payment_method === 'stripe'
-                          ? 'Chờ xác nhận thanh toán thẻ'
+                          ? isOtpStep
+                            ? 'Đang chờ xác thực mã OTP ngân hàng'
+                            : 'Chờ xác nhận thanh toán thẻ'
                           : 'Đang chờ chuyển khoản'}
                       </span>
                     </div>
                     <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">
                       {activeOrder.payment_method === 'stripe'
-                        ? 'Thanh Toán Thẻ Quốc Tế (Visa / Mastercard)'
+                        ? isOtpStep
+                          ? 'Xác Thực Bảo Mật 3D-Secure (OTP)'
+                          : 'Thanh Toán Thẻ Quốc Tế (Visa / Mastercard)'
                         : activeOrder.payment_method === 'payos'
                           ? 'Cổng Thanh Toán PayOS (VietQR Tự Động)'
                           : 'Quét Mã VietQR Để Thanh Toán'}
@@ -1143,13 +1224,99 @@ export default function Pricing() {
                   <div className="text-right">
                     <span className="text-[10px] text-slate-400 block font-medium">Hết hạn sau</span>
                     <span className="text-sm font-mono font-bold text-amber-600 dark:text-amber-400">
-                      {formatCountdown(timeRemaining)}
+                      {formatCountdown(isOtpStep ? otpSecondsLeft : timeRemaining)}
                     </span>
                   </div>
                 </div>
 
                 {/* ===== PHƯƠNG THỨC 1: STRIPE / THẺ TÍN DỤNG QUỐC TẾ ===== */}
                 {activeOrder.payment_method === 'stripe' && (
+                  isOtpStep ? (
+                    <div className="mt-5 space-y-5 animate-in fade-in duration-200">
+                      <div className="p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-500/20 text-center">
+                        <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white mx-auto flex items-center justify-center shadow-md shadow-indigo-600/30 mb-3">
+                          <ShieldCheck className="w-7 h-7" />
+                        </div>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                          Xác Thực Bảo Mật 3D-Secure (OTP)
+                        </h4>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 max-w-sm mx-auto">
+                          Ngân hàng phát hành thẻ yêu cầu xác thực bảo mật 2 lớp. Mã OTP gồm 6 chữ số đã được gửi tới số điện thoại{' '}
+                          <strong className="text-indigo-600 dark:text-indigo-400 font-mono">{otpPhoneHint}</strong>
+                        </p>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-center text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            Nhập mã OTP xác thực
+                          </label>
+                          <div className="max-w-xs mx-auto">
+                            <input
+                              type="text"
+                              maxLength={6}
+                              value={otpCode}
+                              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                              placeholder="123456"
+                              className="w-full text-center tracking-[0.4em] text-xl font-bold font-mono py-3 px-4 rounded-2xl bg-slate-50 dark:bg-[#0B0D12] border-2 border-indigo-500/40 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/20 text-slate-900 dark:text-white transition-all"
+                              autoFocus
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs px-2 text-slate-500 dark:text-slate-400">
+                          <div className="flex items-center gap-1.5 font-mono">
+                            <Clock className="w-3.5 h-3.5 text-amber-500" />
+                            <span>Mã hết hạn sau: {formatCountdown(otpSecondsLeft)}</span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleResendOtp}
+                            disabled={isResendingOtp}
+                            className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-semibold disabled:opacity-40"
+                          >
+                            {isResendingOtp ? 'Đang gửi...' : 'Gửi lại mã OTP'}
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-1">
+                          <button
+                            type="button"
+                            onClick={handleFillTestOtp}
+                            className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-semibold inline-flex items-center gap-1"
+                          >
+                            <Zap className="w-3 h-3 fill-current" />
+                            <span>⚡ Điền nhanh OTP Test (123456)</span>
+                          </button>
+                          <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                            <Lock className="w-3 h-3 text-emerald-500" />
+                            <span>Verified by Visa / Mastercard ID</span>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 space-y-2">
+                          <button
+                            type="button"
+                            onClick={handleVerifyOtp}
+                            disabled={isVerifyingOtp || !otpCode.trim()}
+                            className="w-full py-3 px-4 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>{isVerifyingOtp ? 'Đang xác thực OTP...' : 'Xác Nhận & Hoàn Tất Thanh Toán'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setIsOtpStep(false)}
+                            className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.04] transition-all"
+                          >
+                            Quay lại thông tin thẻ
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
                   <div className="mt-5 space-y-5">
                     {/* Visual Card Preview */}
                     <div className="relative overflow-hidden rounded-2xl bg-gradient-to-tr from-slate-900 via-indigo-950 to-slate-900 text-white p-5 border border-white/15 shadow-xl">
@@ -1297,8 +1464,8 @@ export default function Pricing() {
                         <Lock className="w-3.5 h-3.5" />
                         <span>
                           {isProcessingCard
-                            ? 'Đang xử lý qua Stripe...'
-                            : `Xác Nhận & Thanh Toán ${activeOrder.final_amount.toLocaleString()} đ`}
+                            ? 'Đang kết nối bảo mật...'
+                            : `Tiến Hành Xác Thực & Thanh Toán ${activeOrder.final_amount.toLocaleString()} đ`}
                         </span>
                       </button>
 
@@ -1319,6 +1486,7 @@ export default function Pricing() {
                         )}
                     </div>
                   </div>
+                  )
                 )}
 
                 {/* ===== PHƯƠNG THỨC 2 & 3: VIETQR HOẶC PAYOS ===== */}

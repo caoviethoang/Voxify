@@ -15,6 +15,8 @@ vi.mock('../api/payment', () => ({
   apiDownloadReceipt: vi.fn(),
   apiSimulateSandboxPayment: vi.fn(),
   apiPayWithCard: vi.fn(),
+  apiVerifyCardOtp: vi.fn(),
+  apiResendCardOtp: vi.fn(),
 }))
 
 vi.mock('../context/AuthContext', () => ({
@@ -233,7 +235,7 @@ describe('Pricing Page', () => {
     })
   })
 
-  it('creates an order with Stripe and pays successfully using credit card', async () => {
+  it('creates an order with Stripe and pays successfully through 3D-Secure OTP challenge', async () => {
     const mockStripeOrder: paymentApi.Order = {
       id: 100,
       order_code: 'VOX100000',
@@ -266,7 +268,14 @@ describe('Pricing Page', () => {
     }
 
     vi.mocked(paymentApi.apiCreateOrder).mockResolvedValue(mockStripeOrder)
-    vi.mocked(paymentApi.apiPayWithCard).mockResolvedValue(mockPaidOrder)
+    vi.mocked(paymentApi.apiPayWithCard).mockResolvedValue({
+      order: mockStripeOrder,
+      requires_otp: true,
+      phone_hint: '******242',
+      expires_in: 180,
+      message: 'Ngân hàng phát hành yêu cầu xác thực 3D-Secure.',
+    })
+    vi.mocked(paymentApi.apiVerifyCardOtp).mockResolvedValue(mockPaidOrder)
 
     render(
       <MemoryRouter initialEntries={['/pricing']}>
@@ -306,10 +315,11 @@ describe('Pricing Page', () => {
     const fillTestCardBtn = screen.getByText(/Điền nhanh thẻ Visa Test/i)
     await userEvent.click(fillTestCardBtn)
 
-    // Click Pay button
-    const payBtn = screen.getByRole('button', { name: /Xác Nhận & Thanh Toán/i })
+    // Click Pay button to trigger 3DS OTP
+    const payBtn = screen.getByRole('button', { name: /Tiến Hành Xác Thực & Thanh Toán/i })
     await userEvent.click(payBtn)
 
+    // Should transition to 3D-Secure OTP challenge view
     await waitFor(() => {
       expect(paymentApi.apiPayWithCard).toHaveBeenCalledWith(100, {
         card_number: '4242424242424242',
@@ -318,6 +328,20 @@ describe('Pricing Page', () => {
         exp_year: '28',
         cvc: '123',
       })
+      expect(screen.getAllByText('Xác Thực Bảo Mật 3D-Secure (OTP)').length).toBeGreaterThan(0)
+      expect(screen.getByText(/Điền nhanh OTP Test/i)).toBeInTheDocument()
+    })
+
+    // Click fill test OTP
+    const fillOtpBtn = screen.getByText(/Điền nhanh OTP Test/i)
+    await userEvent.click(fillOtpBtn)
+
+    // Click confirm OTP
+    const confirmOtpBtn = screen.getByRole('button', { name: /Xác Nhận & Hoàn Tất Thanh Toán/i })
+    await userEvent.click(confirmOtpBtn)
+
+    await waitFor(() => {
+      expect(paymentApi.apiVerifyCardOtp).toHaveBeenCalledWith(100, '123456')
       expect(screen.getByText(/Thanh toán thành công/i)).toBeInTheDocument()
     })
   })

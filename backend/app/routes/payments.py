@@ -16,6 +16,7 @@ from app.models.payment import OrderStatus
 from app.models.user import User
 from app.schemas.payment import (
     CardPaymentRequest,
+    CardPaymentResult,
     CouponValidateRequest,
     CouponValidateResponse,
     OrderCreateRequest,
@@ -24,7 +25,9 @@ from app.schemas.payment import (
     PricingPlanCreate,
     PricingPlanOut,
     PricingPlanUpdate,
+    ResendOtpResponse,
     SandboxPaymentSimulateRequest,
+    VerifyOtpRequest,
     WebhookPayOSPayload,
 )
 from app.services.payment_service import PaymentService
@@ -194,15 +197,15 @@ async def cancel_order(
     return _format_order(order)
 
 
-@router.post("/orders/{order_id}/pay-card", response_model=OrderOut, summary="Thanh toán bằng thẻ Visa/Mastercard")
+@router.post("/orders/{order_id}/pay-card", response_model=CardPaymentResult, summary="Khởi tạo thanh toán thẻ và xác thực 3DS OTP")
 async def pay_order_with_card(
     order_id: int,
     payload: CardPaymentRequest,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Xác nhận thanh toán thẻ quốc tế qua Stripe / Napas."""
-    updated_order, _ = await PaymentService.process_card_payment(
+    """Khởi tạo thanh toán thẻ quốc tế qua Stripe / Napas và tạo yêu cầu 3D-Secure OTP."""
+    updated_order, requires_otp, phone_hint, expires_in = await PaymentService.process_card_payment(
         db=db,
         order_id=order_id,
         user_id=current_user.id,
@@ -212,7 +215,51 @@ async def pay_order_with_card(
         cvc=payload.cvc,
         cardholder_name=payload.cardholder_name,
     )
-    return _format_order(updated_order)
+    return CardPaymentResult(
+        order=_format_order(updated_order),
+        requires_otp=requires_otp,
+        phone_hint=phone_hint,
+        expires_in=expires_in,
+        message="Vui lòng nhập mã OTP được gửi đến số điện thoại của bạn để xác thực giao dịch.",
+    )
+
+
+@router.post("/orders/{order_id}/verify-otp", response_model=OrderOut, summary="Xác thực OTP và hoàn tất đơn hàng thẻ")
+async def verify_order_card_otp(
+    order_id: int,
+    payload: VerifyOtpRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Xác thực mã 3D-Secure OTP và kích hoạt cộng credit cho tài khoản."""
+    paid_order, _ = await PaymentService.verify_card_otp(
+        db=db,
+        order_id=order_id,
+        user_id=current_user.id,
+        otp=payload.otp,
+    )
+    return _format_order(paid_order)
+
+
+@router.post("/orders/{order_id}/resend-otp", response_model=ResendOtpResponse, summary="Gửi lại mã xác thực OTP")
+async def resend_order_card_otp(
+    order_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Gửi lại mã OTP xác thực thẻ nếu hết hạn."""
+    res = await PaymentService.resend_card_otp(
+        db=db,
+        order_id=order_id,
+        user_id=current_user.id,
+    )
+    return ResendOtpResponse(
+        success=bool(res.get("success", True)),
+        message=str(res.get("message", "Đã gửi lại mã OTP.")),
+        phone_hint=str(res.get("phone_hint", "******899")),
+        expires_in=int(res.get("expires_in", 180)),
+    )
+
 
 
 @router.get("/orders/{order_id}/receipt", summary="Tải biên lai thanh toán PDF")
