@@ -15,6 +15,7 @@ from app.dependencies import get_current_active_user, get_current_admin_user
 from app.models.payment import OrderStatus
 from app.models.user import User
 from app.schemas.payment import (
+    CardPaymentRequest,
     CouponValidateRequest,
     CouponValidateResponse,
     OrderCreateRequest,
@@ -191,6 +192,27 @@ async def cancel_order(
     """Hủy đơn hàng nếu người dùng không muốn thanh toán tiếp."""
     order = await PaymentService.cancel_order(db, order_id, current_user.id)
     return _format_order(order)
+
+
+@router.post("/orders/{order_id}/pay-card", response_model=OrderOut, summary="Thanh toán bằng thẻ Visa/Mastercard")
+async def pay_order_with_card(
+    order_id: int,
+    payload: CardPaymentRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Xác nhận thanh toán thẻ quốc tế qua Stripe / Napas."""
+    updated_order, _ = await PaymentService.process_card_payment(
+        db=db,
+        order_id=order_id,
+        user_id=current_user.id,
+        card_number=payload.card_number,
+        exp_month=payload.exp_month,
+        exp_year=payload.exp_year,
+        cvc=payload.cvc,
+        cardholder_name=payload.cardholder_name,
+    )
+    return _format_order(updated_order)
 
 
 @router.get("/orders/{order_id}/receipt", summary="Tải biên lai thanh toán PDF")

@@ -147,3 +147,20 @@ export const apiSimulateSandboxPayment = async (
   }>('/payments/sandbox/simulate-payment', { order_id: orderId })
   return data
 }
+
+export interface CardPaymentPayload {
+  card_number: string
+  exp_month: string
+  exp_year: string
+  cvc: string
+  cardholder_name: string
+}
+
+// 9. Thanh toán trực tiếp bằng thẻ Visa / MasterCard / JCB qua Stripe
+export const apiPayWithCard = async (
+  orderId: number,
+  cardData: CardPaymentPayload
+): Promise<Order> => {
+  const { data } = await client.post<Order>(`/payments/orders/${orderId}/pay-card`, cardData)
+  return data
+}

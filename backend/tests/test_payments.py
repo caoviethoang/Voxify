@@ -313,3 +313,84 @@ async def test_download_pdf_receipt():
         assert res_ok.status_code == 200
         assert res_ok.headers["content-type"] == "application/pdf"
         assert res_ok.content.startswith(b"%PDF-1.4")
+
+
+@pytest.mark.asyncio
+async def test_card_payment_stripe_flow():
+    """Kiểm tra quy trình thanh toán thẻ tín dụng quốc tế (Visa/Mastercard/Stripe)."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        token, user_id = await register_and_login(client, "cardpay")
+        auth_headers = {"Authorization": f"Bearer {token}"}
+
+        plans_res = await client.get("/api/payments/plans")
+        pack = next(p for p in plans_res.json() if p["code"] == "credit_100k")
+
+        me_init = await client.get("/api/me", headers=auth_headers)
+        initial_balance = me_init.json()["credit_balance"]
+
+        # 1. Tạo đơn hàng chọn cổng stripe
+        create_res = await client.post(
+            "/api/payments/orders",
+            headers=auth_headers,
+            json={"plan_id": pack["id"], "payment_method": "stripe"},
+        )
+        assert create_res.status_code == 200
+        order = create_res.json()
+        assert order["payment_method"] == "stripe"
+        assert order["status"] == "pending"
+
+        # 2. Thử thanh toán với số thẻ không hợp lệ (< 12 số) -> 422 (Schema validation)
+        invalid_card_res = await client.post(
+            f"/api/payments/orders/{order['id']}/pay-card",
+            headers=auth_headers,
+            json={
+                "card_number": "12345",
+                "cardholder_name": "TEST USER",
+                "exp_month": "12",
+                "exp_year": "28",
+                "cvc": "123",
+            },
+        )
+        assert invalid_card_res.status_code == 422
+
+        # 3. Thanh toán thẻ hợp lệ
+        valid_card_res = await client.post(
+            f"/api/payments/orders/{order['id']}/pay-card",
+            headers=auth_headers,
+            json={
+                "card_number": "4242424242424242",
+                "cardholder_name": "TEST USER",
+                "exp_month": "12",
+                "exp_year": "28",
+                "cvc": "123",
+            },
+        )
+        assert valid_card_res.status_code == 200
+        paid_order = valid_card_res.json()
+        assert paid_order["status"] == "paid"
+        assert paid_order["paid_at"] is not None
+
+        # 4. Kiểm tra số dư credit của user đã được cộng
+        me_res = await client.get("/api/me", headers=auth_headers)
+        assert me_res.status_code == 200
+        assert me_res.json()["credit_balance"] == initial_balance + pack["credits"]
+
+        # 5. Thanh toán lại lần 2 đơn đã trả tiền -> Idempotent, giữ nguyên status paid và không cộng trùng
+        repeat_card_res = await client.post(
+            f"/api/payments/orders/{order['id']}/pay-card",
+            headers=auth_headers,
+            json={
+                "card_number": "4242424242424242",
+                "cardholder_name": "TEST USER",
+                "exp_month": "12",
+                "exp_year": "28",
+                "cvc": "123",
+            },
+        )
+        assert repeat_card_res.status_code == 200
+        assert repeat_card_res.json()["status"] == "paid"
+
+        me_res2 = await client.get("/api/me", headers=auth_headers)
+        assert me_res2.json()["credit_balance"] == initial_balance + pack["credits"]
+

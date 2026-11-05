@@ -161,3 +161,11 @@ class WebhookSePayPayload(BaseModel):
 
 class SandboxPaymentSimulateRequest(BaseModel):
     order_id: int
+
+
+class CardPaymentRequest(BaseModel):
+    card_number: str = Field(..., min_length=12, max_length=24)
+    exp_month: str = Field(..., min_length=1, max_length=2)
+    exp_year: str = Field(..., min_length=2, max_length=4)
+    cvc: str = Field(..., min_length=3, max_length=4)
+    cardholder_name: str = Field(..., min_length=2, max_length=100)

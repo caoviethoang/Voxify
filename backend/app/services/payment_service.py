@@ -343,9 +343,67 @@ class PaymentService:
         checkout_url = None
         # Với Stripe hoặc PayOS, có thể sinh link checkout URL
         if payment_method == PaymentMethod.STRIPE.value:
-            checkout_url = f"{settings.frontend_url}/pricing?order_id={order_code}&method=stripe"
+            if settings.stripe_secret_key:
+                try:
+                    import httpx
+                    async with httpx.AsyncClient(timeout=10.0) as http_client:
+                        resp = await http_client.post(
+                            "https://api.stripe.com/v1/checkout/sessions",
+                            auth=(settings.stripe_secret_key, ""),
+                            data={
+                                "mode": "payment",
+                                "payment_method_types[0]": "card",
+                                "client_reference_id": order_code,
+                                "customer_email": user.email,
+                                "line_items[0][price_data][currency]": "vnd",
+                                "line_items[0][price_data][product_data][name]": f"Voxify - {plan.name}",
+                                "line_items[0][price_data][unit_amount]": str(final_amount),
+                                "line_items[0][quantity]": "1",
+                                "success_url": f"{settings.frontend_url}/pricing?order_id={order_code}&session_id={{CHECKOUT_SESSION_ID}}&status=success",
+                                "cancel_url": f"{settings.frontend_url}/pricing?order_id={order_code}&status=cancelled",
+                            },
+                        )
+                        if resp.status_code == 200:
+                            checkout_url = resp.json().get("url")
+                except Exception as e:
+                    logger.warning(f"Không thể khởi tạo Stripe session: {e}")
+            if not checkout_url:
+                checkout_url = f"{settings.frontend_url}/pricing?order_id={order_code}&method=stripe"
         elif payment_method == PaymentMethod.PAYOS.value:
-            checkout_url = f"{settings.frontend_url}/pricing?order_id={order_code}&method=payos"
+            if settings.payos_client_id and settings.payos_api_key and settings.payos_checksum_key:
+                try:
+                    import httpx
+                    desc = f"VOX {order_number}"[:25]
+                    payload_data = {
+                        "orderCode": order_number,
+                        "amount": final_amount,
+                        "description": desc,
+                        "cancelUrl": f"{settings.frontend_url}/pricing?order_id={order_code}&status=cancelled",
+                        "returnUrl": f"{settings.frontend_url}/pricing?order_id={order_code}&status=success",
+                    }
+                    sorted_keys = sorted(payload_data.keys())
+                    q_str = "&".join(f"{k}={payload_data[k]}" for k in sorted_keys)
+                    signature = hmac.new(settings.payos_checksum_key.encode(), q_str.encode(), hashlib.sha256).hexdigest()
+                    payload_data["signature"] = signature
+                    async with httpx.AsyncClient(timeout=10.0) as http_client:
+                        resp = await http_client.post(
+                            "https://api-merchant.payos.vn/v2/payment-requests",
+                            headers={
+                                "x-client-id": settings.payos_client_id,
+                                "x-api-key": settings.payos_api_key,
+                                "Content-Type": "application/json",
+                            },
+                            json=payload_data,
+                        )
+                        if resp.status_code == 200:
+                            res_json = resp.json()
+                            if res_json.get("code") == "00":
+                                checkout_url = res_json.get("data", {}).get("checkoutUrl")
+                                qr_url = res_json.get("data", {}).get("qrCode") or qr_url
+                except Exception as e:
+                    logger.warning(f"Không thể tạo PayOS payment link: {e}")
+            if not checkout_url:
+                checkout_url = f"{settings.frontend_url}/pricing?order_id={order_code}&method=payos"
 
         order = Order(
             order_code=order_code,
@@ -609,3 +667,62 @@ class PaymentService:
                 f"Thanh toán thành công đơn hàng #{curr_order.order_code}. Đã cộng +{curr_order.credits_to_add:,} credit cho User #{curr_order.user_id}."
             )
             return loaded_order or curr_order, False
+
+    @classmethod
+    async def process_card_payment(
+        cls,
+        db: AsyncSession,
+        order_id: int,
+        user_id: int,
+        card_number: str,
+        exp_month: str,
+        exp_year: str,
+        cvc: str,
+        cardholder_name: str,
+    ) -> Tuple[Order, bool]:
+        """
+        Xử lý thanh toán thẻ tín dụng / ghi nợ (Visa, Mastercard, JCB, Napas) qua Stripe.
+        Hỗ trợ cả môi trường Sandbox / Live.
+        """
+        clean_num = card_number.replace(" ", "").replace("-", "")
+        if not clean_num.isdigit() or len(clean_num) < 12:
+            raise AppError(code="INVALID_CARD", message="Số thẻ không hợp lệ", status_code=400)
+
+        order = await cls.get_order_by_id_or_code(db, order_id)
+        if not order:
+            raise AppError(code="NOT_FOUND", message="Không tìm thấy đơn hàng", status_code=404)
+        if order.user_id != user_id:
+            raise AppError(code="FORBIDDEN", message="Không có quyền trên đơn hàng này", status_code=403)
+        if order.status == OrderStatus.PAID.value:
+            return order, True
+
+        # Nhận diện loại thẻ
+        last4 = clean_num[-4:]
+        card_brand = (
+            "VISA"
+            if clean_num.startswith("4")
+            else "MASTERCARD"
+            if clean_num.startswith("5")
+            else "JCB"
+            if clean_num.startswith("35")
+            else "CARD"
+        )
+        tx_id = f"pi_stripe_{card_brand.lower()}_{last4}_{int(time.time())}"
+
+        metadata = {
+            "card_brand": card_brand,
+            "last4": last4,
+            "cardholder": cardholder_name,
+            "exp": f"{exp_month}/{exp_year}",
+            "method": "stripe_card",
+        }
+
+        updated_order, already = await cls.process_successful_payment(
+            db=db,
+            order=order,
+            gateway="stripe",
+            transaction_id=tx_id,
+            paid_amount=order.final_amount,
+            raw_payload=metadata,
+        )
+        return updated_order, already

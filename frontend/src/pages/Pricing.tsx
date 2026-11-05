@@ -15,6 +15,8 @@ import {
   RefreshCw,
   X,
   FileText,
+  Lock,
+  ExternalLink,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
@@ -30,6 +32,7 @@ import {
   apiCancelOrder,
   apiDownloadReceipt,
   apiSimulateSandboxPayment,
+  apiPayWithCard,
 } from '../api/payment'
 
 export default function Pricing() {
@@ -64,6 +67,14 @@ export default function Pricing() {
   const [isSimulatingPayment, setIsSimulatingPayment] = useState(false)
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
   const [timeRemaining, setTimeRemaining] = useState<number>(1800) // 30 mins in seconds
+
+  // Credit Card Form State (Stripe)
+  const [cardNumber, setCardNumber] = useState('4242 4242 4242 4242')
+  const [cardHolder, setCardHolder] = useState(user?.full_name?.toUpperCase() || 'NGUYEN VAN A')
+  const [cardExpMonth, setCardExpMonth] = useState('12')
+  const [cardExpYear, setCardExpYear] = useState('28')
+  const [cardCvc, setCardCvc] = useState('123')
+  const [isProcessingCard, setIsProcessingCard] = useState(false)
 
   const couponInputId = useId()
 
@@ -107,6 +118,20 @@ export default function Pricing() {
       fetchOrders(ordersPage)
     }
   }, [activeTab, ordersPage, fetchOrders])
+
+  // Handle return redirect from Stripe or PayOS (e.g. ?order_id=VOX123&status=success)
+  useEffect(() => {
+    const orderIdParam = searchParams.get('order_id')
+    const statusParam = searchParams.get('status')
+    if (orderIdParam && statusParam === 'success') {
+      apiGetOrder(orderIdParam)
+        .then((ord) => {
+          setActiveOrder(ord)
+          refreshUser()
+        })
+        .catch(() => {})
+    }
+  }, [searchParams, refreshUser])
 
   // Realtime Polling for Active Pending Order
   useEffect(() => {
@@ -264,6 +289,45 @@ export default function Pricing() {
     } catch {
       error('Không thể hủy đơn hàng.')
     }
+  }
+
+  // Handle Pay With Credit Card (Stripe)
+  const handlePayWithCard = async () => {
+    if (!activeOrder) return
+    try {
+      setIsProcessingCard(true)
+      const cleanNum = cardNumber.replace(/\s+/g, '')
+      const updated = await apiPayWithCard(activeOrder.id, {
+        card_number: cleanNum,
+        cardholder_name: cardHolder,
+        exp_month: cardExpMonth,
+        exp_year: cardExpYear,
+        cvc: cardCvc,
+      })
+      setActiveOrder(updated)
+      await refreshUser()
+      success(
+        `Thanh toán thẻ thành công! Đã cộng +${updated.credits_to_add.toLocaleString()} credit vào tài khoản.`
+      )
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Thanh toán thẻ thất bại. Vui lòng kiểm tra lại thông tin.'
+      error(msg)
+    } finally {
+      setIsProcessingCard(false)
+    }
+  }
+
+  // Auto-fill test card details for sandbox testing
+  const handleFillTestCard = () => {
+    setCardNumber('4242 4242 4242 4242')
+    setCardHolder(user?.full_name?.toUpperCase() || 'NGUYEN VAN A')
+    setCardExpMonth('12')
+    setCardExpYear('28')
+    setCardCvc('123')
+    info('Đã điền thông tin thẻ Visa Test (Sandbox).')
   }
 
   // Copy to clipboard helper
@@ -1062,133 +1126,333 @@ export default function Pricing() {
                   <div>
                     <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 mb-1 border border-amber-200 dark:border-amber-500/20">
                       <Clock className="w-3 h-3 animate-spin" />
-                      <span>Đang chờ chuyển khoản</span>
+                      <span>
+                        {activeOrder.payment_method === 'stripe'
+                          ? 'Chờ xác nhận thanh toán thẻ'
+                          : 'Đang chờ chuyển khoản'}
+                      </span>
                     </div>
                     <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">
-                      Quét Mã VietQR Để Thanh Toán
+                      {activeOrder.payment_method === 'stripe'
+                        ? 'Thanh Toán Thẻ Quốc Tế (Visa / Mastercard)'
+                        : activeOrder.payment_method === 'payos'
+                          ? 'Cổng Thanh Toán PayOS (VietQR Tự Động)'
+                          : 'Quét Mã VietQR Để Thanh Toán'}
                     </h3>
                   </div>
                   <div className="text-right">
-                    <span className="text-[10px] text-slate-400 block font-medium">
-                      Hết hạn sau
-                    </span>
+                    <span className="text-[10px] text-slate-400 block font-medium">Hết hạn sau</span>
                     <span className="text-sm font-mono font-bold text-amber-600 dark:text-amber-400">
                       {formatCountdown(timeRemaining)}
                     </span>
                   </div>
                 </div>
 
-                {/* QR Code and Bank Details */}
-                <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
-                  {/* QR Image Box */}
-                  <div className="flex flex-col items-center justify-center p-4 bg-white rounded-2xl border border-slate-200 shadow-sm">
-                    {activeOrder.qr_url ? (
-                      <img
-                        src={activeOrder.qr_url}
-                        alt="VietQR Payment Code"
-                        className="w-48 h-48 object-contain rounded-lg"
-                      />
-                    ) : (
-                      <div className="w-48 h-48 flex items-center justify-center text-slate-400">
-                        <QrCode className="w-16 h-16" />
-                      </div>
-                    )}
-                    <span className="text-[10px] text-slate-500 mt-2 font-medium text-center">
-                      Mở app ngân hàng quét mã QR để điền tự động
-                    </span>
-                  </div>
-
-                  {/* Transfer Details with 1-click Copy */}
-                  <div className="space-y-3 text-xs">
-                    <div>
-                      <span className="text-[10px] text-slate-400 block">
-                        Số tiền cần chuyển chính xác:
-                      </span>
-                      <div className="flex items-center justify-between mt-0.5 p-2 rounded-xl bg-slate-50 dark:bg-[#0B0D12] border border-slate-200 dark:border-white/[0.08]">
-                        <span className="font-mono text-base font-extrabold text-indigo-600 dark:text-indigo-400">
-                          {activeOrder.final_amount.toLocaleString()} đ
-                        </span>
-                        <button
-                          onClick={() => handleCopy(activeOrder.final_amount.toString(), 'amount')}
-                          className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-white"
-                          title="Sao chép"
-                        >
-                          {copiedField === 'amount' ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-500" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] text-slate-400 block">
-                        Nội dung chuyển khoản (Bắt buộc):
-                      </span>
-                      <div className="flex items-center justify-between mt-0.5 p-2 rounded-xl bg-amber-50/50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
-                        <span className="font-mono font-bold text-amber-700 dark:text-amber-400">
-                          {activeOrder.transfer_content || activeOrder.order_code}
-                        </span>
-                        <button
-                          onClick={() =>
-                            handleCopy(
-                              activeOrder.transfer_content || activeOrder.order_code,
-                              'content'
-                            )
-                          }
-                          className="p-1 rounded text-amber-600 hover:text-amber-700"
-                          title="Sao chép"
-                        >
-                          {copiedField === 'content' ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-500" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] text-slate-400 block">
-                        Số tài khoản & Ngân hàng:
-                      </span>
-                      <div className="flex items-center justify-between mt-0.5 p-2 rounded-xl bg-slate-50 dark:bg-[#0B0D12] border border-slate-200 dark:border-white/[0.08]">
-                        <div>
-                          <span className="font-mono font-bold text-slate-900 dark:text-white block">
-                            {activeOrder.bank_account_no || '0333888999'}
-                          </span>
-                          <span className="text-[10px] text-slate-500 block">
-                            {activeOrder.bank_name || 'MBBank'} -{' '}
-                            {activeOrder.bank_account_name || 'VOXIFY AI STUDIO'}
+                {/* ===== PHƯƠNG THỨC 1: STRIPE / THẺ TÍN DỤNG QUỐC TẾ ===== */}
+                {activeOrder.payment_method === 'stripe' && (
+                  <div className="mt-5 space-y-5">
+                    {/* Visual Card Preview */}
+                    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-tr from-slate-900 via-indigo-950 to-slate-900 text-white p-5 border border-white/15 shadow-xl">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <CreditCard className="w-6 h-6 text-indigo-400" />
+                          <span className="text-xs font-bold tracking-widest uppercase text-slate-300">
+                            VOXIFY CREDIT CARD
                           </span>
                         </div>
-                        <button
-                          onClick={() =>
-                            handleCopy(activeOrder.bank_account_no || '0333888999', 'acc')
-                          }
-                          className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-white"
-                          title="Sao chép"
-                        >
-                          {copiedField === 'acc' ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-500" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
+                        <span className="font-extrabold italic text-sm text-amber-400 tracking-wider">
+                          {cardNumber.startsWith('5') ? 'MASTERCARD' : 'VISA'}
+                        </span>
+                      </div>
+
+                      {/* Chip */}
+                      <div className="my-4 w-10 h-7 rounded bg-gradient-to-tr from-amber-300 to-amber-500 border border-amber-200 shadow-inner" />
+
+                      {/* Card Number */}
+                      <div className="font-mono text-lg font-bold tracking-widest text-slate-100">
+                        {cardNumber || '•••• •••• •••• ••••'}
+                      </div>
+
+                      {/* Cardholder & Expiry */}
+                      <div className="mt-4 flex items-center justify-between text-xs">
+                        <div>
+                          <span className="text-[9px] uppercase tracking-wider text-slate-400 block">
+                            Chủ thẻ
+                          </span>
+                          <span className="font-semibold uppercase tracking-wider text-slate-200">
+                            {cardHolder || 'NGUYEN VAN A'}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[9px] uppercase tracking-wider text-slate-400 block">
+                            Hết hạn
+                          </span>
+                          <span className="font-mono font-semibold text-slate-200">
+                            {cardExpMonth}/{cardExpYear}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
 
-                {/* Important notice alert */}
-                <div className="mt-5 p-3 rounded-xl bg-slate-50 dark:bg-[#0B0D12] border border-slate-200 dark:border-white/[0.08] flex items-start gap-2.5 text-xs text-slate-500 dark:text-slate-400">
-                  <ShieldCheck className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
-                  <span>
-                    Sau khi bạn chuyển khoản thành công, hệ thống sẽ tự động đối soát và cộng credit
-                    trong 5 - 15 giây. Bạn không cần tải lại trang.
-                  </span>
-                </div>
+                    {/* Credit Card Input Form */}
+                    <div className="space-y-3 text-xs">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Số thẻ (16 chữ số)
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={19}
+                          value={cardNumber}
+                          onChange={(e) => {
+                            const v = e.target.value
+                              .replace(/\D/g, '')
+                              .replace(/(\d{4})/g, '$1 ')
+                              .trim()
+                            setCardNumber(v)
+                          }}
+                          placeholder="4242 4242 4242 4242"
+                          className="w-full px-3.5 py-2.5 rounded-xl font-mono text-xs bg-slate-50 dark:bg-[#0B0D12] border border-slate-200 dark:border-white/[0.1] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            Tên in trên thẻ (không dấu)
+                          </label>
+                          <input
+                            type="text"
+                            value={cardHolder}
+                            onChange={(e) => setCardHolder(e.target.value.toUpperCase())}
+                            placeholder="NGUYEN VAN A"
+                            className="w-full px-3.5 py-2.5 rounded-xl uppercase font-mono text-xs bg-slate-50 dark:bg-[#0B0D12] border border-slate-200 dark:border-white/[0.1] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                              Hết hạn (MM/YY)
+                            </label>
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="text"
+                                maxLength={2}
+                                value={cardExpMonth}
+                                onChange={(e) => setCardExpMonth(e.target.value.replace(/\D/g, ''))}
+                                placeholder="12"
+                                className="w-1/2 text-center px-2 py-2.5 rounded-xl font-mono text-xs bg-slate-50 dark:bg-[#0B0D12] border border-slate-200 dark:border-white/[0.1] text-slate-900 dark:text-white"
+                              />
+                              <span className="text-slate-400">/</span>
+                              <input
+                                type="text"
+                                maxLength={2}
+                                value={cardExpYear}
+                                onChange={(e) => setCardExpYear(e.target.value.replace(/\D/g, ''))}
+                                placeholder="28"
+                                className="w-1/2 text-center px-2 py-2.5 rounded-xl font-mono text-xs bg-slate-50 dark:bg-[#0B0D12] border border-slate-200 dark:border-white/[0.1] text-slate-900 dark:text-white"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                              Mã CVC
+                            </label>
+                            <input
+                              type="password"
+                              maxLength={4}
+                              value={cardCvc}
+                              onChange={(e) => setCardCvc(e.target.value.replace(/\D/g, ''))}
+                              placeholder="123"
+                              className="w-full text-center px-3 py-2.5 rounded-xl font-mono text-xs bg-slate-50 dark:bg-[#0B0D12] border border-slate-200 dark:border-white/[0.1] text-slate-900 dark:text-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Quick fill test card */}
+                      <div className="flex items-center justify-between pt-1">
+                        <button
+                          type="button"
+                          onClick={handleFillTestCard}
+                          className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-semibold inline-flex items-center gap-1"
+                        >
+                          <Zap className="w-3 h-3 fill-current" />
+                          <span>⚡ Điền nhanh thẻ Visa Test (Sandbox)</span>
+                        </button>
+                        <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                          <Lock className="w-3 h-3 text-emerald-500" />
+                          <span>Bảo mật 256-bit SSL</span>
+                        </div>
+                      </div>
+
+                      {/* Pay With Card Button */}
+                      <button
+                        type="button"
+                        onClick={handlePayWithCard}
+                        disabled={isProcessingCard}
+                        className="w-full mt-3 py-3 px-4 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>
+                          {isProcessingCard
+                            ? 'Đang xử lý qua Stripe...'
+                            : `Xác Nhận & Thanh Toán ${activeOrder.final_amount.toLocaleString()} đ`}
+                        </span>
+                      </button>
+
+                      {/* Optional external link if checkout_url is a Stripe hosted checkout page */}
+                      {activeOrder.checkout_url &&
+                        activeOrder.checkout_url.startsWith('https://checkout.stripe.com') && (
+                          <div className="text-center pt-1">
+                            <a
+                              href={activeOrder.checkout_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[11px] text-slate-500 hover:text-indigo-600 underline inline-flex items-center gap-1"
+                            >
+                              <span>Hoặc thanh toán qua trang chính thức Stripe Checkout</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ===== PHƯƠNG THỨC 2 & 3: VIETQR HOẶC PAYOS ===== */}
+                {activeOrder.payment_method !== 'stripe' && (
+                  <div>
+                    {/* QR Code and Bank Details */}
+                    <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
+                      {/* QR Image Box */}
+                      <div className="flex flex-col items-center justify-center p-4 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                        {activeOrder.qr_url ? (
+                          <img
+                            src={activeOrder.qr_url}
+                            alt="VietQR Payment Code"
+                            className="w-48 h-48 object-contain rounded-lg"
+                          />
+                        ) : (
+                          <div className="w-48 h-48 flex items-center justify-center text-slate-400">
+                            <QrCode className="w-16 h-16" />
+                          </div>
+                        )}
+                        <span className="text-[10px] text-slate-500 mt-2 font-medium text-center">
+                          {activeOrder.payment_method === 'payos'
+                            ? 'Quét mã QR qua app ngân hàng hoặc cổng PayOS'
+                            : 'Mở app ngân hàng quét mã QR để điền tự động'}
+                        </span>
+
+                        {activeOrder.checkout_url && activeOrder.payment_method === 'payos' && (
+                          <a
+                            href={activeOrder.checkout_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-3 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-purple-600 text-white hover:bg-purple-700 transition-all inline-flex items-center gap-1.5"
+                          >
+                            <span>Mở Cổng PayOS</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+
+                      {/* Transfer Details with 1-click Copy */}
+                      <div className="space-y-3 text-xs">
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">
+                            Số tiền cần chuyển chính xác:
+                          </span>
+                          <div className="flex items-center justify-between mt-0.5 p-2 rounded-xl bg-slate-50 dark:bg-[#0B0D12] border border-slate-200 dark:border-white/[0.08]">
+                            <span className="font-mono text-base font-extrabold text-indigo-600 dark:text-indigo-400">
+                              {activeOrder.final_amount.toLocaleString()} đ
+                            </span>
+                            <button
+                              onClick={() =>
+                                handleCopy(activeOrder.final_amount.toString(), 'amount')
+                              }
+                              className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                              title="Sao chép"
+                            >
+                              {copiedField === 'amount' ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">
+                            Nội dung chuyển khoản (Bắt buộc):
+                          </span>
+                          <div className="flex items-center justify-between mt-0.5 p-2 rounded-xl bg-amber-50/50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+                            <span className="font-mono font-bold text-amber-700 dark:text-amber-400">
+                              {activeOrder.transfer_content || activeOrder.order_code}
+                            </span>
+                            <button
+                              onClick={() =>
+                                handleCopy(
+                                  activeOrder.transfer_content || activeOrder.order_code,
+                                  'content'
+                                )
+                              }
+                              className="p-1 rounded text-amber-600 hover:text-amber-700"
+                              title="Sao chép"
+                            >
+                              {copiedField === 'content' ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">
+                            Số tài khoản & Ngân hàng:
+                          </span>
+                          <div className="flex items-center justify-between mt-0.5 p-2 rounded-xl bg-slate-50 dark:bg-[#0B0D12] border border-slate-200 dark:border-white/[0.08]">
+                            <div>
+                              <span className="font-mono font-bold text-slate-900 dark:text-white block">
+                                {activeOrder.bank_account_no || '0333888999'}
+                              </span>
+                              <span className="text-[10px] text-slate-500 block">
+                                {activeOrder.bank_name || 'MBBank'} -{' '}
+                                {activeOrder.bank_account_name || 'VOXIFY AI STUDIO'}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() =>
+                                handleCopy(activeOrder.bank_account_no || '0333888999', 'acc')
+                              }
+                              className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                              title="Sao chép"
+                            >
+                              {copiedField === 'acc' ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Important notice alert */}
+                    <div className="mt-5 p-3 rounded-xl bg-slate-50 dark:bg-[#0B0D12] border border-slate-200 dark:border-white/[0.08] flex items-start gap-2.5 text-xs text-slate-500 dark:text-slate-400">
+                      <ShieldCheck className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                      <span>
+                        Sau khi bạn chuyển khoản thành công, hệ thống sẽ tự động đối soát và cộng credit
+                        trong 5 - 15 giây. Bạn không cần tải lại trang.
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Simulation Sandbox Button for Demo/Testing & Cancel */}
                 <div className="mt-6 pt-4 border-t border-slate-100 dark:border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-3">

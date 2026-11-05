@@ -14,6 +14,7 @@ vi.mock('../api/payment', () => ({
   apiCancelOrder: vi.fn(),
   apiDownloadReceipt: vi.fn(),
   apiSimulateSandboxPayment: vi.fn(),
+  apiPayWithCard: vi.fn(),
 }))
 
 vi.mock('../context/AuthContext', () => ({
@@ -229,6 +230,95 @@ describe('Pricing Page', () => {
       expect(screen.getByText('VOX99999')).toBeInTheDocument()
       expect(screen.getByText('0333888999')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Mô Phỏng Sandbox/i })).toBeInTheDocument()
+    })
+  })
+
+  it('creates an order with Stripe and pays successfully using credit card', async () => {
+    const mockStripeOrder: paymentApi.Order = {
+      id: 100,
+      order_code: 'VOX100000',
+      order_number: 100000,
+      user_id: 1,
+      plan_id: 1,
+      plan_name: 'Gói 100K Ký Tự',
+      plan_code: 'credit_100k',
+      original_amount: 59000,
+      discount_amount: 0,
+      final_amount: 59000,
+      credits_to_add: 100000,
+      payment_method: 'stripe',
+      status: 'pending',
+      qr_url: null,
+      checkout_url: null,
+      transfer_content: 'VOX100000',
+      bank_name: null,
+      bank_account_no: null,
+      bank_account_name: null,
+      expires_at: new Date(Date.now() + 1800000).toISOString(),
+      paid_at: null,
+      created_at: new Date().toISOString(),
+    }
+
+    const mockPaidOrder: paymentApi.Order = {
+      ...mockStripeOrder,
+      status: 'paid',
+      paid_at: new Date().toISOString(),
+    }
+
+    vi.mocked(paymentApi.apiCreateOrder).mockResolvedValue(mockStripeOrder)
+    vi.mocked(paymentApi.apiPayWithCard).mockResolvedValue(mockPaidOrder)
+
+    render(
+      <MemoryRouter initialEntries={['/pricing']}>
+        <Pricing />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Gói 100K Ký Tự')).toBeInTheDocument()
+    })
+
+    const selectButtons = screen.getAllByRole('button', { name: 'Nạp Gói Này' })
+    await userEvent.click(selectButtons[0])
+
+    // Select Stripe payment method
+    const stripeOption = await screen.findByText('Thẻ Quốc Tế (Stripe)')
+    await userEvent.click(stripeOption)
+
+    // Submit order creation
+    const submitButton = await screen.findByRole('button', { name: /Tiến Hành Thanh Toán/i })
+    await userEvent.click(submitButton)
+
+    // Should display Stripe card payment screen
+    await waitFor(() => {
+      expect(paymentApi.apiCreateOrder).toHaveBeenCalledWith({
+        plan_id: 1,
+        payment_method: 'stripe',
+        coupon_code: undefined,
+      })
+      expect(
+        screen.getByText('Thanh Toán Thẻ Quốc Tế (Visa / Mastercard)')
+      ).toBeInTheDocument()
+      expect(screen.getByText(/Điền nhanh thẻ Visa Test/i)).toBeInTheDocument()
+    })
+
+    // Click auto-fill test card
+    const fillTestCardBtn = screen.getByText(/Điền nhanh thẻ Visa Test/i)
+    await userEvent.click(fillTestCardBtn)
+
+    // Click Pay button
+    const payBtn = screen.getByRole('button', { name: /Xác Nhận & Thanh Toán/i })
+    await userEvent.click(payBtn)
+
+    await waitFor(() => {
+      expect(paymentApi.apiPayWithCard).toHaveBeenCalledWith(100, {
+        card_number: '4242424242424242',
+        cardholder_name: 'TESTER',
+        exp_month: '12',
+        exp_year: '28',
+        cvc: '123',
+      })
+      expect(screen.getByText(/Thanh toán thành công/i)).toBeInTheDocument()
     })
   })
 })
