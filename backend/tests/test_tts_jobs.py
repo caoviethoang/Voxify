@@ -1,14 +1,15 @@
 """Unit and integration tests for Prompt 5 - TTS Background Jobs, Dictionary, and Subtitles."""
 import asyncio
+
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
+
+from app.db import AsyncSessionLocal
 from app.main import app
 from app.services.audio_service import AudioService
-from app.services.tts_script_parser import TTSScriptParser
-from app.services.tts_job_service import TTSJobService
 from app.services.dictionary_service import DictionaryService
-from app.models.generation import Generation
-from app.db import AsyncSessionLocal
+from app.services.tts_job_service import TTSJobService
+from app.services.tts_script_parser import TTSScriptParser
 
 
 @pytest.mark.asyncio
@@ -16,22 +17,22 @@ async def test_tts_script_parser():
     """Kiểm tra parser tách kịch bản đa giọng và ngắt nghỉ."""
     raw_script = "[Voice: NamMinh] Xin chào các bạn! [pause 1.5s] [Voice: HoaiMy] Rất vui được gặp lại [pause 500ms] mọi người."
     blocks = TTSScriptParser.parse_script(raw_script, default_voice="vi-VN-HoaiMyNeural")
-    
+
     assert len(blocks) >= 4
     # Block 1: speech with NamMinh
     assert blocks[0]["type"] == "speech"
     assert blocks[0]["voice"] == "vi-VN-NamMinhNeural"
     assert "Xin chào các bạn!" in blocks[0]["text"]
-    
+
     # Block 2: pause 1.5s
     assert blocks[1]["type"] == "pause"
     assert blocks[1]["duration"] == 1.5
-    
+
     # Block 3: speech with HoaiMy
     assert blocks[2]["type"] == "speech"
     assert blocks[2]["voice"] == "vi-VN-HoaiMyNeural"
     assert "Rất vui được gặp lại" in blocks[2]["text"]
-    
+
     # Block 4: pause 0.5s
     assert blocks[3]["type"] == "pause"
     assert blocks[3]["duration"] == 0.5
@@ -80,8 +81,10 @@ async def test_subtitle_formatting():
             assert "00:00:00.000 --> 00:00:02.500" in vtt_content
     finally:
         import os
-        if os.path.exists(srt_file): os.remove(srt_file)
-        if os.path.exists(vtt_file): os.remove(vtt_file)
+        if os.path.exists(srt_file):
+            os.remove(srt_file)
+        if os.path.exists(vtt_file):
+            os.remove(vtt_file)
 
 
 @pytest.mark.asyncio

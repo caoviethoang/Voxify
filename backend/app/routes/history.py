@@ -2,9 +2,9 @@
 import logging
 import math
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -28,9 +28,9 @@ router = APIRouter(prefix="/api/history", tags=["History"])
 
 def _build_history_item(gen: Generation) -> HistoryItemResponse:
     """Chuyển đổi Generation model sang HistoryItemResponse kèm URL tải file."""
-    has_audio = gen.status == "done" and bool(gen.file_path) and os.path.exists(gen.file_path)
-    has_srt = gen.status == "done" and bool(gen.srt_path) and os.path.exists(gen.srt_path)
-    has_vtt = gen.status == "done" and bool(gen.vtt_path) and os.path.exists(gen.vtt_path)
+    has_audio = gen.status == "done" and bool(gen.file_path and os.path.exists(gen.file_path))
+    has_srt = gen.status == "done" and bool(gen.srt_path and os.path.exists(gen.srt_path))
+    has_vtt = gen.status == "done" and bool(gen.vtt_path and os.path.exists(gen.vtt_path))
 
     # Ưu tiên tiêu đề tùy chỉnh, nếu không có thì lấy 60 ký tự đầu của text
     title = gen.title if gen.title else (gen.text or "")[:60].strip()
@@ -104,14 +104,14 @@ async def list_history(
     # Lọc theo khoảng ngày
     if date_from:
         try:
-            dt_from = datetime.fromisoformat(date_from).replace(tzinfo=timezone.utc)
+            dt_from = datetime.fromisoformat(date_from).replace(tzinfo=UTC)
             base_conditions.append(Generation.created_at >= dt_from)
         except ValueError:
             logger.warning(f"date_from không hợp lệ: {date_from}")
 
     if date_to:
         try:
-            dt_to = datetime.fromisoformat(date_to).replace(tzinfo=timezone.utc)
+            dt_to = datetime.fromisoformat(date_to).replace(tzinfo=UTC)
             base_conditions.append(Generation.created_at <= dt_to)
         except ValueError:
             logger.warning(f"date_to không hợp lệ: {date_to}")
@@ -264,7 +264,7 @@ async def cleanup_old_generations(db: AsyncSession, retention_days: int = 7) -> 
     - Chỉ xóa bản ghi is_preview=True
     - Áp dụng cho tất cả người dùng (có thể lọc theo plan sau)
     """
-    cutoff_dt = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    cutoff_dt = datetime.now(UTC) - timedelta(days=retention_days)
 
     stmt = select(Generation).where(
         Generation.is_preview == True,  # noqa: E712

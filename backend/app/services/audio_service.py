@@ -5,7 +5,7 @@ import logging
 import os
 import subprocess
 from pathlib import Path
-from typing import List, Tuple, Dict, Any, Optional
+from typing import Any, Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -107,30 +107,51 @@ class AudioService:
             size = os.path.getsize(output_path)
             return output_path, duration, size
 
+        except (FileNotFoundError, RuntimeError) as e:
+            logger.warning(f"ffmpeg không khả dụng hoặc lỗi ({e}), chuyển sang ghép nối file trực tiếp.")
+            with open(output_path, "wb") as out_f:
+                for p in valid_files:
+                    with open(p, "rb") as in_f:
+                        out_f.write(in_f.read())
+            duration = cls.measure_duration(output_path)
+            size = os.path.getsize(output_path)
+            return output_path, duration, size
+
         finally:
             if os.path.exists(list_file_path):
                 os.remove(list_file_path)
 
     @classmethod
     async def generate_silence(cls, duration_seconds: float, output_path: str) -> str:
-        """Tạo đoạn âm thanh khoảng lặng (silence) qua ffmpeg anullsrc."""
+        """Tạo đoạn âm thanh khoảng lặng (silence) qua ffmpeg anullsrc (hoặc fallback nhị phân)."""
         duration = max(0.1, min(duration_seconds, 30.0))
-        cmd = [
-            "ffmpeg",
-            "-y",
-            "-f", "lavfi",
-            "-i", "anullsrc=r=24000:cl=mono",
-            "-t", str(duration),
-            "-q:a", "9",
-            "-acodec", "libmp3lame",
-            output_path,
-        ]
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        await proc.communicate()
+        try:
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-f", "lavfi",
+                "-i", "anullsrc=r=24000:cl=mono",
+                "-t", str(duration),
+                "-q:a", "9",
+                "-acodec", "libmp3lame",
+                output_path,
+            ]
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await proc.communicate()
+            if proc.returncode == 0:
+                return output_path
+        except Exception:
+            pass
+
+        # Fallback tạo khung mp3 im lặng trực tiếp
+        num_frames = max(1, int(duration * 25))
+        silent_frame = b"\xff\xfb\x90\x64" + (b"\x00" * 414)
+        with open(output_path, "wb") as f:
+            f.write(silent_frame * num_frames)
         return output_path
 
     @staticmethod

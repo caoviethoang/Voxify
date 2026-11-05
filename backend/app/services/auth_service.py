@@ -1,6 +1,6 @@
 """Dịch vụ xử lý logic xác thực người dùng."""
-from datetime import datetime, timezone
 import logging
+from datetime import UTC, datetime
 from typing import Optional
 
 from google.auth.transport import requests as google_requests
@@ -115,7 +115,7 @@ class AuthService:
         Lưu token_hash vào bảng refresh_tokens.
         Trả về: (access_token, raw_refresh_token).
         """
-        settings = get_settings()
+        get_settings()
         access_token = create_access_token({
             "sub": str(user.id),
             "email": user.email,
@@ -140,7 +140,7 @@ class AuthService:
     ) -> tuple[str, User]:
         """Tạo access token mới từ refresh token hợp lệ."""
         token_hash = hash_token(raw_refresh_token)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         stmt = select(RefreshToken).where(
             RefreshToken.token_hash == token_hash,
@@ -220,6 +220,8 @@ class AuthService:
             raise ValueError("Đường dẫn xác thực đã hết hạn hoặc không hợp lệ.")
 
         email = payload.get("sub")
+        if not email or not isinstance(email, str):
+            raise ValueError("Mã xác thực không hợp lệ.")
         user = await AuthService.get_user_by_email(db, email)
         if not user:
             raise ValueError("Người dùng không tồn tại.")

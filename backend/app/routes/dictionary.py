@@ -1,5 +1,6 @@
 """Routes quản lý từ điển phát âm cá nhân."""
 from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,8 +9,8 @@ from app.models.user import User
 from app.routes.auth import get_current_user
 from app.schemas.dictionary import (
     DictionaryRuleCreateRequest,
-    DictionaryRuleUpdateRequest,
     DictionaryRuleResponse,
+    DictionaryRuleUpdateRequest,
 )
 from app.services.dictionary_service import DictionaryService
 

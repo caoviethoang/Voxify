@@ -1,8 +1,9 @@
 """Dịch vụ quản lý Credit — Nguồn sự thật duy nhất (Single Source of Truth) về credit."""
 import asyncio
 from math import ceil
-from typing import Optional, Tuple, List, Dict, Any
-from sqlalchemy import select, func, desc
+from typing import Dict, List, Optional, Tuple
+
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -73,6 +74,8 @@ class CreditService:
         if amount == 0:
             # Miễn phí (ví dụ nghe thử)
             user = await cls._get_user_for_update(db, user_id)
+            if not user:
+                raise AppError(code="NOT_FOUND", message="Không tìm thấy người dùng", status_code=404)
             return CreditTransaction(
                 user_id=user_id,
                 amount=0,

@@ -1,7 +1,6 @@
 """Route /api/dashboard — Thống kê và dữ liệu tổng quan cho trang Dashboard."""
 import logging
-from datetime import datetime, timezone
-from typing import List, Optional
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
@@ -34,8 +33,8 @@ async def get_dashboard_stats(
     5. Generation gần nhất để 'Tiếp tục công việc'
     6. 5 hoạt động gần đây nhất
     """
-    now = datetime.now(timezone.utc)
-    start_of_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+    now = datetime.now(UTC)
+    start_of_month = datetime(now.year, now.month, 1, tzinfo=UTC)
 
     # 1. Ký tự đã dùng trong tháng này
     stmt_chars = select(func.coalesce(func.sum(Generation.char_count), 0)).where(

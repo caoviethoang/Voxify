@@ -1,7 +1,6 @@
 """Parser phân tích kịch bản đa giọng ([Voice: Name]) và ngắt nghỉ ([pause Xs])."""
 import re
-from typing import List, Dict, Any
-
+from typing import Any, Dict, List
 
 _PAUSE_REGEX = re.compile(r"\[pause\s*(\d+(?:\.\d+)?)\s*(s|ms)?\]", re.IGNORECASE)
 _VOICE_REGEX = re.compile(r"\[Voice:\s*([^\]]+)\]", re.IGNORECASE)

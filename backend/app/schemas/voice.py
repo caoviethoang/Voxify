@@ -1,5 +1,6 @@
 """Pydantic schemas cho danh sách giọng đọc."""
 from typing import Optional
+
 from pydantic import BaseModel
 
 

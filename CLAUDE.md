@@ -18,6 +18,7 @@ frontend/src/{pages/,components/,api/,i18n/,hooks/,layouts/}
 - Mọi giá trị tiền/credit là số nguyên. Mọi thời gian lưu UTC.
 
 # QUY TẮC
+- Mọi tính năng/sửa lỗi mới phải kèm test; không merge khi CI đỏ.
 - Type hints đầy đủ, lỗi trả JSON {"error": {"code","message"}} với message tiếng Việt.
 - Không hardcode secret, dùng .env + .env.example. Không thêm thư viện thừa.
 - Mỗi tính năng có test cơ bản (pytest) cho phần logic quan trọng (credit, auth, job).

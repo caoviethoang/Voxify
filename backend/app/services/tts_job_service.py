@@ -1,11 +1,10 @@
 """Service quản lý vòng đời và xử lý Job Text to Speech bất đồng bộ."""
 import asyncio
 import logging
-import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -62,7 +61,7 @@ class TTSJobService:
         if not clean_text:
             raise ValueError("Văn bản không được để trống.")
 
-        settings = get_settings()
+        get_settings()
         # Tính toán chi phí credit
         char_count = len(clean_text)
         cost = CreditService.calculate_cost(char_count, provider="edge", voice=voice) if user else 0

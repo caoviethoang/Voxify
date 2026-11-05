@@ -1,8 +1,9 @@
 """Routes quản lý Credit và lịch sử giao dịch sổ cái."""
 import logging
-from typing import Optional, List
 from datetime import datetime
-from fastapi import APIRouter, Depends, Query, HTTPException
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -94,7 +95,7 @@ async def get_credit_transactions(
     total_pages = max(1, (total + limit - 1) // limit) if total > 0 else 1
 
     return CreditTransactionsListResponse(
-        items=items,
+        items=[CreditTransactionItem.model_validate(tx) for tx in items],
         total=total,
         page=page,
         limit=limit,

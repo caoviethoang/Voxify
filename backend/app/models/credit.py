@@ -1,8 +1,9 @@
 """Model giao dịch credit (Sổ cái - Ledger)."""
-from datetime import datetime, timezone
 import enum
+from datetime import UTC, datetime
 from typing import Optional
-from sqlalchemy import String, Integer, DateTime, ForeignKey, Text
+
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -37,7 +38,7 @@ class CreditTransaction(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
         index=True,
     )

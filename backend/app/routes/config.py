@@ -1,5 +1,6 @@
 """Route GET /api/config — trả về cấu hình frontend cần biết."""
 from fastapi import APIRouter
+
 from app.config import get_settings
 
 router = APIRouter(prefix="/api/config", tags=["Config"])

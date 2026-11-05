@@ -1,9 +1,9 @@
 """Service lưu trữ file audio — wrap StorageBackend."""
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from app.storage import get_storage, StorageBackend
 from app.config import get_settings
+from app.storage import StorageBackend, get_storage
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ class StorageService:
         """
         Lưu file audio. Trả về (đường dẫn, kích thước bytes).
         """
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S_%f")
         prefix = "preview" if is_preview else "speech"
         clean_voice = voice.replace("/", "_").replace("\\", "_")
         filename = f"{prefix}_{clean_voice}_{timestamp}.mp3"

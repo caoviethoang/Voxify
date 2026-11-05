@@ -18,7 +18,7 @@ from app.services.tts_service import TTSService
 security = HTTPBearer(auto_error=False)
 
 
-@lru_cache()
+@lru_cache
 def get_tts_service() -> TTSService:
     """Singleton TTSService với provider được cấu hình từ .env."""
     settings = get_settings()

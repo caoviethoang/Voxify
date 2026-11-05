@@ -1,10 +1,11 @@
 """Unit tests cho Dashboard stats API (Issue #9)."""
 import time
-import pytest
-from httpx import AsyncClient, ASGITransport
 
-from app.main import app
+import pytest
+from httpx import ASGITransport, AsyncClient
+
 from app.db import AsyncSessionLocal
+from app.main import app
 from app.models.generation import Generation
 
 
