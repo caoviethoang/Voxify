@@ -259,8 +259,10 @@ class PaymentService:
             return None, 0, "Mã giảm giá không tồn tại."
         if not coupon.is_active:
             return None, 0, "Mã giảm giá đã bị tạm ngừng áp dụng."
-        if coupon.expires_at and coupon.expires_at < datetime.now(UTC):
-            return None, 0, "Mã giảm giá đã hết hạn sử dụng."
+        if coupon.expires_at:
+            exp_at = coupon.expires_at if coupon.expires_at.tzinfo else coupon.expires_at.replace(tzinfo=UTC)
+            if exp_at < datetime.now(UTC):
+                return None, 0, "Mã giảm giá đã hết hạn sử dụng."
         if coupon.max_uses > 0 and coupon.used_count >= coupon.max_uses:
             return None, 0, "Mã giảm giá đã hết lượt sử dụng."
         if order_amount < coupon.min_order_amount:
@@ -319,8 +321,10 @@ class PaymentService:
         final_amount = max(0, original_amount - discount_amount)
 
         # Sinh mã đơn hàng độc nhất
-        now_ts = int(time.time())
-        order_number = (now_ts % 100000000) * 10 + (user.id % 10)  # Integer thích hợp cho PayOS
+        import random
+        now_ts = int(time.time() * 10)
+        rand_suffix = random.randint(10, 99)
+        order_number = (now_ts % 10000000) * 100 + rand_suffix  # Số nguyên cho PayOS
         order_code = f"VOX{order_number}"
         transfer_content = order_code
 
