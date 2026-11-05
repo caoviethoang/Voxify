@@ -36,6 +36,9 @@ class TTSJobResponse(BaseModel):
     format: str
     credit_used: int
     voice: str
+    rate: Optional[str] = "+0%"
+    pitch: Optional[str] = "+0Hz"
+    volume: Optional[str] = "+0%"
     error_message: Optional[str] = None
     audio_url: Optional[str] = None
     srt_url: Optional[str] = None

@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 import TextToSpeech from './pages/TextToSpeech'
 import VoiceLibrary from './pages/VoiceLibrary'
 import CreditHistory from './pages/CreditHistory'
+import History from './pages/History'
 import PlaceholderPage from './pages/PlaceholderPage'
 import Profile from './pages/Profile'
 import NotFound from './pages/NotFound'
@@ -58,15 +59,7 @@ export default function App() {
               <Route path="/profile" element={<Profile />} />
 
               {/* Các trang công cụ, lịch sử, mở rộng */}
-              <Route
-                path="/history"
-                element={
-                  <PlaceholderPage
-                    title="Lịch Sử Xử Lý"
-                    subtitle="Quản lý và tải lại toàn bộ các đoạn âm thanh và video bạn đã tạo trong các phiên trước."
-                  />
-                }
-              />
+              <Route path="/history" element={<History />} />
               <Route
                 path="/pricing"
                 element={

@@ -14,7 +14,8 @@ from app.core.logging import setup_logging
 from app.db import create_tables
 from app.dependencies import get_current_active_user, get_tts_service
 from app.models.user import User
-from app.routes import auth_router, config_router, credit_router, dictionary_router, tts_router, voices_router
+from app.routes import auth_router, config_router, credit_router, dictionary_router, history_router, tts_router, voices_router
+from app.routes.history import cleanup_old_generations
 from app.schemas.auth import UserOut
 
 settings = get_settings()
@@ -35,6 +36,15 @@ async def lifespan(app: FastAPI):
         logger.info("Đã tạo/kiểm tra bảng database.")
     except Exception as e:
         logger.warning(f"Không thể tạo bảng DB: {e}")
+
+    # Dọn dẹp các bản ghi preview cũ khi khởi động
+    try:
+        from app.db import AsyncSessionLocal
+        async with AsyncSessionLocal() as cleanup_session:
+            await cleanup_old_generations(cleanup_session)
+        logger.info("Đã hoàn tất dọn dẹp bản ghi preview cũ.")
+    except Exception as e:
+        logger.warning(f"Không thể dọn dẹp bản ghi cũ: {e}")
 
     # Warmup cache danh sách giọng đọc
     try:
@@ -81,6 +91,7 @@ app.include_router(credit_router)
 app.include_router(dictionary_router)
 app.include_router(voices_router)
 app.include_router(tts_router)
+app.include_router(history_router)
 
 
 @app.get("/api/me", response_model=UserOut, summary="Lấy thông tin người dùng hiện tại (alias)")

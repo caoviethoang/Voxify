@@ -36,6 +36,9 @@ export interface TTSJob {
   format: 'mp3' | 'wav'
   credit_used: number
   voice: string
+  rate?: string
+  pitch?: string
+  volume?: string
   error_message?: string | null
   audio_url?: string | null
   srt_url?: string | null
