@@ -24,7 +24,6 @@ import {
   Newspaper,
   Megaphone,
   Smile,
-  Coins,
   ChevronRight,
   ChevronLeft,
   X,
@@ -37,12 +36,19 @@ import {
   Layers,
   Users,
   Trash2,
-  FileText,
   CheckCircle2,
   Loader2,
+  Upload,
+  User as UserIcon,
+  MessageSquare,
+  ChevronDown,
+  Wind,
+  Mic,
+  Clock,
+  ExternalLink,
 } from 'lucide-react'
 
-// Mẫu văn bản theo chủ đề
+// Mẫu văn bản theo chủ đề cho menu "Kịch bản"
 const SAMPLE_PROMPTS = [
   {
     id: 'story',
@@ -104,13 +110,21 @@ export default function TextToSpeech() {
   const [volume, setVolume] = useState(0)
   const [outputFormat, setOutputFormat] = useState<'mp3' | 'wav'>('mp3')
   const [applyDictionary, setApplyDictionary] = useState(true)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [voiceStyle, setVoiceStyle] = useState<'story' | 'natural' | 'expressive'>('natural')
 
-  // Modals state
+  // Chế độ soạn thảo (Đơn giọng, Nhiều giọng, Phụ đề)
+  const [editorMode, setEditorMode] = useState<'single' | 'multi' | 'subtitle'>('single')
+
+  // Refs
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Modals & Menus state
   const [isVoicePickerOpen, setIsVoicePickerOpen] = useState(false)
   const [isDictionaryModalOpen, setIsDictionaryModalOpen] = useState(false)
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false)
   const [isMultiVoiceMenuOpen, setIsMultiVoiceMenuOpen] = useState(false)
+  const [isScriptMenuOpen, setIsScriptMenuOpen] = useState(false)
 
   // Right panel: Tab & Collapse
   const [rightPanelTab, setRightPanelTab] = useState<'settings' | 'history'>('settings')
@@ -120,6 +134,7 @@ export default function TextToSpeech() {
   // Recent jobs from server
   const [recentJobs, setRecentJobs] = useState<TTSJob[]>([])
   const [isFetchingRecentJobs, setIsFetchingRecentJobs] = useState(false)
+  const [historySearch, setHistorySearch] = useState('')
 
   // Replay state
   const [replayUrl, setReplayUrl] = useState<string | null>(null)
@@ -130,20 +145,16 @@ export default function TextToSpeech() {
   const [replaySrtUrl, setReplaySrtUrl] = useState<string | undefined>()
   const [replayVttUrl, setReplayVttUrl] = useState<string | undefined>()
 
-  // Table search & selection
-  const [tableSearch, setTableSearch] = useState('')
-  const [selectedTableRows, setSelectedTableRows] = useState<string[]>([])
-
   const voices = voiceData?.voices ?? []
 
   // Khởi tạo giọng mặc định
   useEffect(() => {
-    if (!selectedVoiceId && config.default_voice) {
+    if (!selectedVoiceId && config?.default_voice) {
       setSelectedVoiceId(config.default_voice)
     } else if (!selectedVoiceId && voices.length > 0) {
       setSelectedVoiceId(voices[0].id)
     }
-  }, [config.default_voice, voices, selectedVoiceId])
+  }, [config?.default_voice, voices, selectedVoiceId])
 
   const selectedVoice = voices.find((v) => v.id === selectedVoiceId)
   const selectedVoiceName = selectedVoice?.name ?? selectedVoiceId
@@ -151,7 +162,7 @@ export default function TextToSpeech() {
   const location = useLocation()
   const appliedJobIdRef = useRef<number | null>(null)
 
-  // Khôi phục văn bản và cài đặt khi người dùng bấm "Mở lại" từ trang Lịch sử xử lý
+  // Khôi phục văn bản và cài đặt khi người dùng bấm "Mở lại" từ trang Lịch sử
   useEffect(() => {
     const job = (location.state as { reopenJob?: TTSJob })?.reopenJob
     if (job && appliedJobIdRef.current !== job.id) {
@@ -182,7 +193,7 @@ export default function TextToSpeech() {
         if (job.srt_url) setReplaySrtUrl(job.srt_url)
         if (job.vtt_url) setReplayVttUrl(job.vtt_url)
       }
-      toast.info('Đã nạp lại văn bản và cài đặt từ lịch sử xử lý.')
+      toast.info('Đã nạp lại văn bản và cài đặt từ lịch sử.')
     }
   }, [location.state, voices, toast])
 
@@ -197,7 +208,7 @@ export default function TextToSpeech() {
     if (!userId) return
     setIsFetchingRecentJobs(true)
     try {
-      const data = await listRecentJobs(20)
+      const data = await listRecentJobs(30)
       setRecentJobs(data)
     } catch (err) {
       console.warn('Lỗi tải danh sách job gần đây:', err)
@@ -212,7 +223,7 @@ export default function TextToSpeech() {
     }
   }, [userId, fetchRecentJobs])
 
-  // Theo dõi trạng thái hoàn thành của job hiện tại (chỉ thông báo một lần khi vừa kết thúc xử lý)
+  // Theo dõi trạng thái hoàn thành của job hiện tại
   const wasRunningRef = useRef(false)
 
   useEffect(() => {
@@ -340,6 +351,22 @@ export default function TextToSpeech() {
     toast.info(`Đã chèn ngắt nghỉ ${milliseconds >= 1000 ? `${milliseconds / 1000}s` : `${milliseconds}ms`}`)
   }
 
+  // Chèn thẻ cảm xúc / âm thanh tự nhiên
+  const insertEmotionTag = (tag: string, label: string) => {
+    if (!textareaRef.current) return
+    const el = textareaRef.current
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    const formattedTag = ` [${tag}] `
+    const newText = text.substring(0, start) + formattedTag + text.substring(end)
+    setText(newText)
+    setTimeout(() => {
+      el.focus()
+      el.setSelectionRange(start + formattedTag.length, start + formattedTag.length)
+    }, 0)
+    toast.info(`Đã chèn hiệu ứng: ${label}`)
+  }
+
   // Chèn thẻ đa giọng [Voice: VoiceName]
   const insertVoiceTag = (voiceId: string) => {
     if (!textareaRef.current) return
@@ -364,6 +391,7 @@ export default function TextToSpeech() {
     setRate(0)
     setPitch(0)
     setVolume(0)
+    setVoiceStyle('natural')
     toast.info('Đã đặt lại các thông số âm thanh về mặc định.')
   }
 
@@ -372,6 +400,26 @@ export default function TextToSpeech() {
     if (!text.trim()) return
     setText('')
     toast.info('Đã xóa nội dung văn bản.')
+  }
+
+  // Xử lý tải file văn bản lên (.txt, .docx, .srt, .vtt)
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const content = event.target?.result as string
+      if (content) {
+        setText(content)
+        toast.success(`Đã nạp nội dung từ tệp "${file.name}"`)
+      }
+    }
+    reader.onerror = () => {
+      toast.error('Không thể đọc tệp văn bản này.')
+    }
+    reader.readAsText(file)
+    e.target.value = ''
   }
 
   // Nạp lại cấu hình từ một job đã hoàn thành
@@ -383,9 +431,25 @@ export default function TextToSpeech() {
     setReplayDuration(job.duration || 0)
     setReplaySrtUrl(getJobSubtitleUrl(job.id, 'srt'))
     setReplayVttUrl(getJobSubtitleUrl(job.id, 'vtt'))
+  }
+
+  // Nạp text và giọng vào editor
+  const handleLoadJobIntoEditor = (job: TTSJob) => {
     setText(job.text)
     if (job.voice) setSelectedVoiceId(job.voice)
-    toast.info('Đã nạp văn bản và âm thanh bản ghi.')
+    if (job.rate) {
+      const r = parseInt(job.rate.replace('%', ''))
+      if (!isNaN(r)) setRate(r)
+    }
+    if (job.pitch) {
+      const p = parseInt(job.pitch.replace('Hz', ''))
+      if (!isNaN(p)) setPitch(p)
+    }
+    if (job.volume) {
+      const v = parseInt(job.volume.replace('%', ''))
+      if (!isNaN(v)) setVolume(v)
+    }
+    toast.success('Đã nạp văn bản và cài đặt vào ô soạn thảo.')
   }
 
   // Xác định audio URL đang hiển thị trên Player
@@ -402,607 +466,565 @@ export default function TextToSpeech() {
   const activeVttUrl = replayUrl ? replayVttUrl : hasActiveJobDone ? getJobSubtitleUrl(activeJob.id, 'vtt') : undefined
   const activeIsPreview = replayUrl ? replayIsPreview : !hasActiveJobDone && Boolean(previewUrl)
 
+  // Danh sách job được lọc trong tab lịch sử
+  const filteredJobs = recentJobs.filter((item) =>
+    historySearch ? item.text.toLowerCase().includes(historySearch.toLowerCase()) : true
+  )
+
   return (
-    <div className="flex flex-col lg:flex-row gap-5 animate-in fade-in duration-200">
+    <div className="flex flex-col lg:flex-row gap-4 lg:gap-5 h-[calc(100vh-125px)] min-h-[620px] animate-in fade-in duration-200">
       {/* =========================================================================
-          CỘT CHÍNH (GIỮA): SOẠN THẢO + CÔNG CỤ + ACTION BAR + BẢNG LỊCH SỬ PHIÊN
+          CỘT CHÍNH (GIỮA): Ô NHẬP VĂN BẢN FULL MÀN HÌNH (THEO LAYOUT ẢNH 1 YUPVOX)
       ========================================================================= */}
-      <div className="flex-1 min-w-0 space-y-5">
-        {/* Hộp soạn thảo Studio chính */}
-        <div className="rounded-card bg-white dark:bg-[#12151C] border border-slate-200 dark:border-white/[0.08] shadow-xs flex flex-col overflow-hidden">
-          {/* 1. Thanh công cụ phía trên ô soạn thảo */}
-          <div className="p-3 border-b border-slate-200 dark:border-white/[0.08] bg-slate-50/70 dark:bg-[#0B0D12]/70 flex flex-wrap items-center justify-between gap-2.5">
-            <div className="flex items-center gap-2">
-              {/* Chip giọng đọc đang chọn */}
+      <div className="flex-1 min-w-0 flex flex-col h-full rounded-2xl bg-white dark:bg-[#12151C] border border-slate-200 dark:border-white/[0.08] shadow-sm overflow-hidden">
+        {/* 1. Header toolbar trên cùng của ô soạn thảo */}
+        <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 dark:border-white/[0.08] bg-slate-50/70 dark:bg-[#0B0D12]/60 flex flex-wrap items-center justify-between gap-2.5">
+          {/* Nhóm Tabs chế độ: Đơn giọng | Nhiều giọng | Phụ đề */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setEditorMode('single')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-control text-xs font-semibold transition-all ${
+                editorMode === 'single'
+                  ? 'bg-white dark:bg-[#181C25] text-indigo-600 dark:text-indigo-400 border border-slate-200 dark:border-white/[0.1] shadow-xs'
+                  : 'text-slate-600 dark:text-white/60 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
+              }`}
+            >
+              <UserIcon className="w-3.5 h-3.5" />
+              <span>Đơn giọng</span>
+            </button>
+
+            <div className="relative">
               <button
-                onClick={() => setIsVoicePickerOpen(true)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-control bg-white dark:bg-[#181C25] border border-slate-200 dark:border-white/[0.1] hover:border-indigo-500/50 text-xs font-semibold text-slate-800 dark:text-white transition-all shadow-xs"
+                type="button"
+                onClick={() => {
+                  setEditorMode('multi')
+                  setIsMultiVoiceMenuOpen(!isMultiVoiceMenuOpen)
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-control text-xs font-semibold transition-all ${
+                  editorMode === 'multi'
+                    ? 'bg-white dark:bg-[#181C25] text-purple-600 dark:text-purple-400 border border-slate-200 dark:border-white/[0.1] shadow-xs'
+                    : 'text-slate-600 dark:text-white/60 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
+                }`}
               >
-                <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-                <span className="truncate max-w-[140px]">{selectedVoiceName}</span>
-                <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono">Đổi giọng &rarr;</span>
+                <Users className="w-3.5 h-3.5 text-purple-500" />
+                <span>Nhiều giọng</span>
+                <ChevronDown className="w-3 h-3 opacity-60" />
               </button>
 
-              {/* Chip Tốc độ */}
-              <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-control bg-slate-100 dark:bg-[#181C25] text-xs text-slate-700 dark:text-white/70 font-mono border border-slate-200/60 dark:border-transparent">
-                <span className="text-[10px] text-slate-500 dark:text-white/40">Tốc độ:</span>
-                <span>{rateStr}</span>
-              </div>
-
-              {/* Định dạng */}
-              <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-control bg-slate-100 dark:bg-[#181C25] text-xs text-slate-700 dark:text-white/70 font-mono border border-slate-200/60 dark:border-transparent">
-                <span className="text-[10px] text-slate-500 dark:text-white/40">Định dạng:</span>
-                <span className="text-emerald-600 dark:text-emerald-400 font-semibold uppercase">
-                  {outputFormat}
-                </span>
-              </div>
-            </div>
-
-            {/* Các tiện ích: Ngắt nghỉ, Đa giọng, Từ điển, Tạo hàng loạt */}
-            <div className="flex items-center gap-1.5">
-              {/* Nút Ngắt nghỉ */}
-              <div className="relative group">
-                <button
-                  type="button"
-                  onClick={() => insertPause(1000)}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control hover:bg-slate-100 dark:hover:bg-white/5 text-xs text-slate-700 hover:text-slate-900 dark:text-white/70 dark:hover:text-white transition-colors"
-                  title="Chèn dấu ngắt nghỉ [pause 1s]"
-                >
-                  <PauseCircle className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                  <span className="hidden sm:inline">Ngắt nghỉ (1s)</span>
-                </button>
-              </div>
-
-              {/* Nút Đa giọng */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIsMultiVoiceMenuOpen(!isMultiVoiceMenuOpen)}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control hover:bg-slate-100 dark:hover:bg-white/5 text-xs text-slate-700 hover:text-slate-900 dark:text-white/70 dark:hover:text-white transition-colors"
-                  title="Chèn thẻ chuyển giọng đọc trong kịch bản"
-                >
-                  <Users className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                  <span className="hidden sm:inline">Đa giọng</span>
-                </button>
-
-                {isMultiVoiceMenuOpen && (
-                  <div className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-[#181C25] border border-slate-200 dark:border-white/[0.1] rounded-control shadow-xl p-1 z-30">
-                    <div className="p-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-white/[0.06]">
-                      Chọn giọng chèn
-                    </div>
-                    <div className="max-h-48 overflow-y-auto py-1 space-y-0.5">
-                      {voices.map((v) => (
-                        <button
-                          key={v.id}
-                          onClick={() => insertVoiceTag(v.id)}
-                          className="w-full text-left px-2.5 py-1.5 rounded text-xs text-slate-800 dark:text-white/90 hover:bg-indigo-50 dark:hover:bg-white/5 transition-colors flex items-center justify-between"
-                        >
-                          <span className="truncate">{v.name}</span>
-                          <span className="text-[10px] text-slate-400 font-mono">
-                            {v.gender === 'Female' ? 'Nữ' : 'Nam'}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
+              {/* Menu chèn thẻ giọng */}
+              {isMultiVoiceMenuOpen && (
+                <div className="absolute left-0 top-full mt-1.5 w-60 bg-white dark:bg-[#181C25] border border-slate-200 dark:border-white/[0.1] rounded-control shadow-xl p-1.5 z-40 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="p-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-white/[0.06] flex items-center justify-between">
+                    <span>Chọn giọng chèn vào kịch bản</span>
+                    <button
+                      onClick={() => setIsMultiVoiceMenuOpen(false)}
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
                   </div>
-                )}
-              </div>
-
-              {/* Nút Từ điển */}
-              <button
-                type="button"
-                onClick={() => setIsDictionaryModalOpen(true)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control hover:bg-slate-100 dark:hover:bg-white/5 text-xs text-slate-700 hover:text-slate-900 dark:text-white/70 dark:hover:text-white transition-colors"
-                title="Từ điển phát âm cá nhân"
-              >
-                <BookA className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                <span className="hidden sm:inline">Từ điển</span>
-              </button>
-
-              {/* Nút Tạo hàng loạt (Batch) */}
-              <button
-                type="button"
-                onClick={() => setIsBatchModalOpen(true)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control hover:bg-slate-100 dark:hover:bg-white/5 text-xs text-slate-700 hover:text-slate-900 dark:text-white/70 dark:hover:text-white transition-colors"
-                title="Tải file .txt/.docx/.srt và tạo hàng loạt"
-              >
-                <Layers className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span className="hidden sm:inline">Tạo hàng loạt</span>
-              </button>
-
-              {/* Nút Xóa văn bản */}
-              {text.trim() && (
-                <button
-                  type="button"
-                  onClick={handleClearText}
-                  className="p-1.5 rounded-control text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
-                  title="Xóa nội dung"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
-
-              {/* Nút mở Settings panel trên tablet/mobile */}
-              <button
-                onClick={() => setMobileDrawerOpen(true)}
-                className="lg:hidden flex items-center gap-1 px-2.5 py-1.5 rounded-control bg-slate-100 hover:bg-slate-200 dark:bg-[#181C25] dark:hover:bg-[#202532] text-xs text-slate-800 dark:text-white"
-              >
-                <Sliders className="w-3.5 h-3.5" />
-                <span>Cài đặt</span>
-              </button>
-            </div>
-          </div>
-
-          {/* 2. Ô soạn thảo rộng thoáng */}
-          <div className="p-4 relative">
-            <textarea
-              ref={textareaRef}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Nhập hoặc dán nội dung văn bản tiếng Việt bạn muốn chuyển đổi thành giọng đọc tự nhiên tại đây... (Hỗ trợ cú pháp [pause 1s] hoặc [Voice: TênGiọng])"
-              rows={8}
-              className="w-full bg-transparent text-sm sm:text-base leading-relaxed text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 focus:outline-none resize-none font-sans"
-            />
-
-            {/* Hàng chip ví dụ khi ô trống */}
-            {!text.trim() && (
-              <div className="pt-3 border-t border-slate-100 dark:border-white/[0.04]">
-                <span className="text-[11px] text-slate-500 dark:text-white/40 block mb-2 font-medium">
-                  Ví dụ mẫu (bấm để thử ngay):
-                </span>
-                <div className="flex flex-wrap items-center gap-2">
-                  {SAMPLE_PROMPTS.map((sample) => {
-                    const Icon = sample.icon
-                    return (
+                  <div className="max-h-52 overflow-y-auto py-1 space-y-0.5 scrollbar-thin">
+                    {voices.map((v) => (
                       <button
-                        key={sample.id}
-                        onClick={() => setText(sample.text)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-control bg-slate-50 hover:bg-slate-100 dark:bg-[#181C25] dark:hover:bg-[#1f2430] border border-slate-200/80 dark:border-white/[0.06] hover:border-indigo-500/40 text-xs text-slate-700 hover:text-slate-900 dark:text-white/80 dark:hover:text-white transition-all group"
+                        key={v.id}
+                        onClick={() => insertVoiceTag(v.id)}
+                        className="w-full text-left px-2.5 py-1.5 rounded text-xs text-slate-800 dark:text-white/90 hover:bg-indigo-50 dark:hover:bg-white/5 transition-colors flex items-center justify-between"
                       >
-                        <Icon className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform" />
-                        <span>{sample.label}</span>
+                        <span className="truncate font-medium">{v.name}</span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {v.gender === 'Female' ? 'Nữ' : 'Nam'}
+                        </span>
                       </button>
-                    )
-                  })}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setEditorMode('subtitle')
+                toast.info('Chế độ phụ đề tự động tạo file .srt và .vtt kèm theo mốc thời gian chuẩn xác.')
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-control text-xs font-semibold transition-all ${
+                editorMode === 'subtitle'
+                  ? 'bg-white dark:bg-[#181C25] text-amber-600 dark:text-amber-400 border border-slate-200 dark:border-white/[0.1] shadow-xs'
+                  : 'text-slate-600 dark:text-white/60 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-amber-500" />
+              <span>Phụ đề</span>
+            </button>
           </div>
 
-          {/* 3. Thanh tiến độ khi Job đang xử lý */}
-          {isJobRunning && (
-            <div className="px-4 py-3 bg-indigo-50/80 dark:bg-indigo-950/30 border-t border-indigo-100 dark:border-indigo-500/20 space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-semibold">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600 dark:text-indigo-400" />
-                  <span>Đang tổng hợp giọng nói qua worker nền...</span>
-                </div>
-                <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                  {jobProgress}%
-                </span>
-              </div>
-              <div className="w-full bg-slate-200 dark:bg-white/10 rounded-full h-2 overflow-hidden">
-                <div
-                  className="bg-gradient-to-r from-indigo-500 to-purple-600 h-2 rounded-full transition-all duration-300 ease-out"
-                  style={{ width: `${jobProgress}%` }}
-                />
-              </div>
-            </div>
-          )}
+          {/* Nhóm công cụ bên phải: Kịch bản mẫu, Từ điển, Hàng loạt, Xóa */}
+          <div className="flex items-center gap-2">
+            {/* Menu Kịch bản mẫu */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsScriptMenuOpen(!isScriptMenuOpen)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-control bg-white dark:bg-[#181C25] border border-slate-200 dark:border-white/[0.1] hover:border-indigo-500/50 text-xs font-medium text-slate-700 dark:text-white/90 transition-all shadow-xs"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Kịch bản</span>
+                <ChevronDown className="w-3 h-3 text-slate-400" />
+              </button>
 
-          {/* Thông báo lỗi nếu Job thất bại */}
-          {jobError && (
-            <div className="px-4 py-2.5 bg-rose-50 dark:bg-rose-500/10 border-t border-rose-200 dark:border-rose-500/20 flex items-center justify-between text-xs text-rose-700 dark:text-rose-400">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>{jobError} (Credit đã được hoàn lại đầy đủ vào tài khoản).</span>
-              </div>
-            </div>
-          )}
-
-          {/* 4. Thanh hành động cố định phía dưới */}
-          <div className="p-3.5 border-t border-slate-200 dark:border-white/[0.08] bg-slate-50/70 dark:bg-[#0B0D12]/70 flex flex-wrap items-center justify-between gap-3">
-            {/* Đếm ký tự & Credit ước tính */}
-            <div className="flex items-center gap-3 text-xs">
-              {/* Đếm ký tự */}
-              <div className="font-mono text-slate-500 dark:text-white/50">
-                <span className="text-slate-900 dark:text-white font-semibold">
-                  {text.length.toLocaleString('vi-VN')}
-                </span>
-                <span> / {config.max_chars?.toLocaleString('vi-VN') || '20.000'} ký tự</span>
-              </div>
-
-              {/* Ước tính credit tiêu tốn */}
-              {estimatedCredits > 0 && (
-                <div
-                  className={`flex items-center gap-1.5 text-[11px] font-mono px-2 py-0.5 rounded border ${
-                    isInsufficient
-                      ? 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20'
-                      : 'text-[#F59E0B] bg-amber-500/10 border-amber-500/20'
-                  }`}
-                >
-                  {isInsufficient ? (
-                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                  ) : (
-                    <Coins className="w-3.5 h-3.5 flex-shrink-0" />
-                  )}
-                  <span>
-                    {isInsufficient
-                      ? `Cần ~${estimatedCredits.toLocaleString('vi-VN')} credit (còn ${userBalance.toLocaleString('vi-VN')})`
-                      : `Sẽ dùng ~${estimatedCredits.toLocaleString('vi-VN')} credit`}
-                  </span>
+              {isScriptMenuOpen && (
+                <div className="absolute right-0 top-full mt-1.5 w-64 bg-white dark:bg-[#181C25] border border-slate-200 dark:border-white/[0.1] rounded-control shadow-xl p-1.5 z-40 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="p-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-white/[0.06]">
+                    Chọn văn bản mẫu
+                  </div>
+                  <div className="py-1 space-y-0.5">
+                    {SAMPLE_PROMPTS.map((sample) => {
+                      const Icon = sample.icon
+                      return (
+                        <button
+                          key={sample.id}
+                          onClick={() => {
+                            setText(sample.text)
+                            setIsScriptMenuOpen(false)
+                            toast.info(`Đã nạp kịch bản mẫu: ${sample.label}`)
+                          }}
+                          className="w-full text-left px-2.5 py-2 rounded text-xs text-slate-800 dark:text-white/90 hover:bg-indigo-50 dark:hover:bg-white/5 transition-colors flex items-center gap-2.5 group"
+                        >
+                          <Icon className="w-3.5 h-3.5 text-indigo-500 group-hover:scale-110 transition-transform" />
+                          <div>
+                            <p className="font-semibold">{sample.label}</p>
+                            <p className="text-[10px] text-slate-400 truncate max-w-[190px]">{sample.text}</p>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Các nút hành động chính */}
-            <div className="flex items-center gap-2">
-              {/* Nút Nạp thêm nếu thiếu credit */}
-              {isInsufficient && (
-                <Link
-                  to="/pricing"
-                  className="flex items-center gap-1 px-3 py-2 rounded-control bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-xs transition-all"
-                  title="Số dư không đủ. Bấm để nạp thêm credit"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Nạp thêm</span>
-                </Link>
-              )}
+            {/* Từ điển phát âm */}
+            <button
+              type="button"
+              onClick={() => setIsDictionaryModalOpen(true)}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-control hover:bg-slate-100 dark:hover:bg-white/5 text-xs text-slate-700 dark:text-white/70 hover:text-slate-900 dark:hover:text-white transition-colors"
+              title="Từ điển phát âm cá nhân"
+            >
+              <BookA className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Từ điển</span>
+            </button>
 
-              {/* Nút Nghe thử (200 ký tự) */}
+            {/* Tạo hàng loạt */}
+            <button
+              type="button"
+              onClick={() => setIsBatchModalOpen(true)}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-control hover:bg-slate-100 dark:hover:bg-white/5 text-xs text-slate-700 dark:text-white/70 hover:text-slate-900 dark:hover:text-white transition-colors"
+              title="Tạo giọng nói hàng loạt từ file văn bản"
+            >
+              <Layers className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Hàng loạt</span>
+            </button>
+
+            {/* Xóa nội dung */}
+            {text.trim() && (
               <button
                 type="button"
-                onClick={handlePreview}
-                disabled={isPreviewLoading || isJobRunning || !text.trim()}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-control bg-white hover:bg-slate-50 dark:bg-transparent dark:hover:bg-white/5 border border-slate-200 dark:border-white/[0.1] hover:border-slate-300 dark:hover:border-white/[0.2] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold text-slate-700 dark:text-white transition-all shadow-xs"
+                onClick={handleClearText}
+                className="p-1.5 rounded-control text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                title="Xóa toàn bộ văn bản"
               >
-                {isPreviewLoading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Play className="w-3.5 h-3.5" />
-                )}
-                <span>Nghe thử (200 ký tự)</span>
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
+            )}
 
-              {/* Nút Tạo giọng nói chính: Gradient Chàm -> Tím */}
-              <button
-                type="button"
-                onClick={handleGenerateJob}
-                disabled={isJobRunning || isPreviewLoading || !text.trim() || isInsufficient}
-                className="flex items-center gap-2 px-5 py-2 rounded-control bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold shadow-lg shadow-indigo-600/25 transition-all"
-                title={
-                  isInsufficient
-                    ? 'Số dư credit không đủ. Vui lòng nạp thêm!'
-                    : 'Phím tắt: ⌘+Enter / Ctrl+Enter'
-                }
-              >
-                {isJobRunning ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Đang xử lý {jobProgress}%</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Tạo giọng nói</span>
-                    <span className="hidden sm:inline-block font-mono text-[10px] text-white/70 bg-white/10 px-1 py-0.2 rounded">
-                      ⌘↵
-                    </span>
-                  </>
-                )}
-              </button>
-            </div>
+            {/* Nút bật/tắt settings trên mobile (< 1024px) */}
+            <button
+              type="button"
+              onClick={() => setMobileDrawerOpen(true)}
+              className="lg:hidden flex items-center gap-1 px-2.5 py-1.5 rounded-control bg-slate-100 hover:bg-slate-200 dark:bg-[#181C25] dark:hover:bg-[#202532] text-xs font-semibold text-slate-800 dark:text-white"
+            >
+              <Sliders className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Cài đặt</span>
+            </button>
           </div>
         </div>
 
-        {/* Audio Player hiển thị khi có audio */}
-        {activeUrl && (
-          <AudioPlayer
-            url={activeUrl}
-            voiceName={activeVoiceName}
-            isPreview={activeIsPreview}
-            duration={activeDuration}
-            format={activeFormat}
-            srtUrl={activeSrtUrl}
-            vttUrl={activeVttUrl}
+        {/* 2. Ô soạn thảo mở rộng toàn màn hình (Full viewport editor body) */}
+        <div className="flex-1 min-h-0 relative flex flex-col p-4 sm:p-6 overflow-hidden">
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Nhập hoặc dán nội dung văn bản cần chuyển đổi thành giọng nói..."
+            className="flex-1 w-full bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 text-sm sm:text-base leading-relaxed focus:outline-none resize-none font-sans overflow-y-auto scrollbar-thin"
           />
-        )}
 
-        {/* 5. Bảng "Danh sách chuyển đổi" bên dưới */}
-        <div className="rounded-card bg-white dark:bg-[#12151C] border border-slate-200 dark:border-white/[0.08] shadow-xs p-4 sm:p-5 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Danh sách chuyển đổi gần đây
-              </h3>
-              <p className="text-[11px] text-slate-500 dark:text-white/40">
-                Toàn bộ các bản ghi giọng nói và tác vụ nền đã xử lý
-              </p>
-            </div>
-
-            {/* Thanh công cụ bảng: Search + Refresh */}
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-400 dark:text-white/30 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={tableSearch}
-                  onChange={(e) => setTableSearch(e.target.value)}
-                  placeholder="Tìm kiếm bản ghi..."
-                  className="bg-slate-50 dark:bg-[#181C25] border border-slate-200 dark:border-white/[0.08] rounded-control pl-7 pr-3 py-1 text-xs text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 focus:outline-none focus:border-indigo-500"
-                />
+          {/* Dòng gợi ý nhanh khi ô soạn thảo trống */}
+          {!text.trim() && (
+            <div className="flex-shrink-0 pt-3 border-t border-slate-100 dark:border-white/[0.04] mt-2">
+              <span className="text-[11px] text-slate-400 dark:text-white/40 block mb-2 font-medium">
+                Gợi ý mẫu thử giọng nhanh:
+              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {SAMPLE_PROMPTS.slice(0, 3).map((sample) => (
+                  <button
+                    key={sample.id}
+                    onClick={() => setText(sample.text)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-control bg-slate-50 hover:bg-slate-100 dark:bg-[#181C25] dark:hover:bg-[#1e232f] border border-slate-200 dark:border-white/[0.06] text-xs text-slate-700 dark:text-white/80 hover:border-indigo-500/40 transition-all"
+                  >
+                    <span>{sample.label}</span>
+                  </button>
+                ))}
               </div>
+            </div>
+          )}
+        </div>
 
-              <button
-                onClick={fetchRecentJobs}
-                disabled={isFetchingRecentJobs}
-                className="p-1.5 rounded-control text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-white/40 dark:hover:text-white dark:hover:bg-white/5 border border-slate-200 dark:border-white/[0.08] disabled:opacity-50"
-                title="Làm mới"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isFetchingRecentJobs ? 'animate-spin' : ''}`} />
-              </button>
+        {/* Thanh tiến độ khi Worker đang xử lý job */}
+        {isJobRunning && (
+          <div className="flex-shrink-0 px-5 py-3 bg-indigo-50/90 dark:bg-indigo-950/40 border-t border-indigo-100 dark:border-indigo-500/20 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-semibold">
+                <Loader2 className="w-4 h-4 animate-spin text-indigo-600 dark:text-indigo-400" />
+                <span>Đang tổng hợp giọng nói qua worker nền...</span>
+              </div>
+              <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                {jobProgress}%
+              </span>
+            </div>
+            <div className="w-full bg-indigo-200/60 dark:bg-indigo-900/40 rounded-full h-1.5 overflow-hidden">
+              <div
+                className="bg-indigo-600 dark:bg-indigo-400 h-full transition-all duration-300 rounded-full"
+                style={{ width: `${jobProgress}%` }}
+              />
             </div>
           </div>
+        )}
 
-          {/* Table */}
-          <div className="overflow-x-auto scrollbar-thin">
-            <table className="w-full text-left text-xs">
-              <thead className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-white/40 border-b border-slate-200 dark:border-white/[0.06] bg-slate-50/70 dark:bg-[#0B0D12]/30">
-                <tr>
-                  <th className="py-2.5 px-3 w-8">
-                    <input
-                      type="checkbox"
-                      className="rounded accent-indigo-600 cursor-pointer"
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedTableRows(recentJobs.map((j) => j.id.toString()))
-                        } else {
-                          setSelectedTableRows([])
-                        }
-                      }}
-                    />
-                  </th>
-                  <th className="py-2.5 px-3">Nội dung</th>
-                  <th className="py-2.5 px-3">Giọng đọc</th>
-                  <th className="py-2.5 px-3">Thời lượng</th>
-                  <th className="py-2.5 px-3">Credit</th>
-                  <th className="py-2.5 px-3">Định dạng</th>
-                  <th className="py-2.5 px-3">Trạng thái</th>
-                  <th className="py-2.5 px-3 text-right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                {recentJobs.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-8 text-center text-slate-400 dark:text-white/30">
-                      Chưa có bản ghi âm nào được tạo. Hãy nhập văn bản và bấm "Tạo giọng nói"!
-                    </td>
-                  </tr>
-                ) : (
-                  recentJobs
-                    .filter((item) =>
-                      tableSearch ? item.text.toLowerCase().includes(tableSearch.toLowerCase()) : true
-                    )
-                    .map((item) => {
-                      const isChecked = selectedTableRows.includes(item.id.toString())
-                      const itemVoice = voices.find((v) => v.id === item.voice)?.name || item.voice
-                      const isItemDone = item.status === 'done'
+        {/* Báo lỗi nếu job thất bại */}
+        {jobError && (
+          <div className="flex-shrink-0 px-5 py-2.5 bg-rose-50 dark:bg-rose-950/30 border-t border-rose-200 dark:border-rose-500/20 flex items-center justify-between text-xs text-rose-700 dark:text-rose-300">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-600" />
+              <span>{jobError}</span>
+            </div>
+          </div>
+        )}
 
-                      return (
-                        <tr
-                          key={item.id}
-                          className="hover:bg-slate-50/80 dark:hover:bg-white/[0.02] transition-colors group"
-                        >
-                          <td className="py-3 px-3">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => {
-                                setSelectedTableRows((prev) =>
-                                  prev.includes(item.id.toString())
-                                    ? prev.filter((id) => id !== item.id.toString())
-                                    : [...prev, item.id.toString()]
-                                )
-                              }}
-                              className="rounded accent-indigo-600 cursor-pointer"
-                            />
-                          </td>
-                          <td className="py-3 px-3 max-w-[220px]">
-                            <p
-                              className="font-semibold text-slate-900 dark:text-white truncate cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400"
-                              title={item.text}
-                              onClick={() => isItemDone && handleReplayJob(item)}
-                            >
-                              {item.text}
-                            </p>
-                          </td>
-                          <td className="py-3 px-3">
-                            <span className="text-slate-700 dark:text-white/80">{itemVoice}</span>
-                          </td>
-                          <td className="py-3 px-3 font-mono text-slate-600 dark:text-white/60">
-                            {item.duration ? `${item.duration.toFixed(1)}s` : '--'}
-                          </td>
-                          <td className="py-3 px-3 font-mono text-[#F59E0B] font-semibold">
-                            {item.credit_used ?? item.char_count}
-                          </td>
-                          <td className="py-3 px-3 font-mono text-emerald-600 dark:text-emerald-400 font-medium uppercase">
-                            {item.format || 'mp3'}
-                          </td>
-                          <td className="py-3 px-3">
-                            {item.status === 'done' && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                                <CheckCircle2 className="w-3 h-3" />
-                                Hoàn thành
-                              </span>
-                            )}
-                            {item.status === 'processing' && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                                {item.progress}%
-                              </span>
-                            )}
-                            {item.status === 'failed' && (
-                              <span
-                                className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full"
-                                title={item.error_message || undefined}
-                              >
-                                <AlertTriangle className="w-3 h-3" />
-                                Lỗi
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3 px-3 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              {isItemDone && (
-                                <>
-                                  <button
-                                    onClick={() => handleReplayJob(item)}
-                                    className="p-1.5 rounded-control text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/10"
-                                    title="Phát lại & nạp cài đặt"
-                                  >
-                                    <Play className="w-3.5 h-3.5 fill-current" />
-                                  </button>
-                                  <a
-                                    href={getJobAudioUrl(item.id)}
-                                    download={`voxify_${item.id}.${item.format || 'mp3'}`}
-                                    className="p-1.5 rounded-control text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/10"
-                                    title="Tải về audio"
-                                  >
-                                    <Download className="w-3.5 h-3.5" />
-                                  </a>
-                                  {item.srt_url && (
-                                    <a
-                                      href={getJobSubtitleUrl(item.id, 'srt')}
-                                      download={`voxify_${item.id}.srt`}
-                                      className="p-1.5 rounded-control text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-white/60 dark:hover:text-white dark:hover:bg-white/10 font-mono text-[10px]"
-                                      title="Tải phụ đề SRT"
-                                    >
-                                      <FileText className="w-3.5 h-3.5 text-indigo-500" />
-                                    </a>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })
-                )}
-              </tbody>
-            </table>
+        {/* Audio Player tích hợp ngay dưới ô soạn thảo khi có audio */}
+        {activeUrl && (
+          <div className="flex-shrink-0 px-4 py-2 border-t border-slate-100 dark:border-white/[0.06] bg-slate-50/50 dark:bg-[#0B0D12]/40">
+            <AudioPlayer
+              url={activeUrl}
+              voiceName={activeVoiceName}
+              isPreview={activeIsPreview}
+              duration={activeDuration}
+              format={activeFormat}
+              srtUrl={activeSrtUrl}
+              vttUrl={activeVttUrl}
+            />
+          </div>
+        )}
+
+        {/* 3. Footer Toolbar dưới cùng: Tải file, Chèn ngắt nghỉ, Bộ đếm ký tự & Nút Tạo giọng nói */}
+        <div className="flex-shrink-0 p-3 sm:px-5 border-t border-slate-200 dark:border-white/[0.08] bg-slate-50/70 dark:bg-[#0B0D12]/70 flex flex-wrap items-center justify-between gap-3">
+          {/* Nhóm thao tác file & chèn cú pháp bên trái */}
+          <div className="flex items-center gap-2">
+            {/* Input file ẩn */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".txt,.docx,.srt,.vtt,.md"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            {/* Nút Upload file */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 rounded-control bg-white dark:bg-[#181C25] border border-slate-200 dark:border-white/[0.1] hover:border-indigo-500/50 text-slate-700 hover:text-indigo-600 dark:text-white/80 dark:hover:text-white transition-all shadow-xs"
+              title="Tải lên tệp văn bản (.txt, .docx, .srt, .vtt)"
+            >
+              <Upload className="w-4 h-4" />
+            </button>
+
+            {/* Nút chèn ngắt nghỉ */}
+            <button
+              type="button"
+              onClick={() => insertPause(1000)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-control bg-white dark:bg-[#181C25] border border-slate-200 dark:border-white/[0.1] hover:border-indigo-500/50 text-xs font-medium text-slate-700 hover:text-indigo-600 dark:text-white/80 dark:hover:text-white transition-all shadow-xs"
+              title="Chèn dấu ngắt nghỉ [pause 1s]"
+            >
+              <PauseCircle className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Ngắt nghỉ (1s)</span>
+            </button>
+          </div>
+
+          {/* Nhóm thông tin credit & Nút Tạo giọng nói bên phải */}
+          <div className="flex items-center gap-3">
+            {/* Bộ đếm ký tự & ước tính credit */}
+            <div className="text-right text-xs">
+              <span className="font-mono text-slate-600 dark:text-white/70">
+                {text.length.toLocaleString('vi-VN')}
+                <span className="text-slate-400 dark:text-white/40"> / 28.000 ký tự</span>
+              </span>
+              {text.trim().length > 0 && (
+                <div className="text-[11px] font-medium">
+                  {isInsufficient ? (
+                    <span className="text-rose-600 dark:text-rose-400">
+                      Thiếu credit ({userBalance.toLocaleString('vi-VN')} / {estimatedCredits.toLocaleString('vi-VN')})
+                    </span>
+                  ) : (
+                    <span className="text-slate-400 dark:text-white/40">
+                      ~{estimatedCredits.toLocaleString('vi-VN')} credit
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Nút Nạp thêm nếu thiếu credit */}
+            {isInsufficient && (
+              <Link
+                to="/pricing"
+                className="flex items-center gap-1 px-3 py-2 rounded-control bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-xs transition-all"
+                title="Bấm để nạp thêm credit"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Nạp thêm</span>
+              </Link>
+            )}
+
+            {/* Nút Nghe thử 200 ký tự */}
+            <button
+              type="button"
+              onClick={handlePreview}
+              disabled={isPreviewLoading || isJobRunning || !text.trim()}
+              className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-control bg-white hover:bg-slate-50 dark:bg-transparent dark:hover:bg-white/5 border border-slate-200 dark:border-white/[0.1] hover:border-slate-300 dark:hover:border-white/[0.2] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold text-slate-700 dark:text-white transition-all shadow-xs"
+            >
+              {isPreviewLoading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Play className="w-3.5 h-3.5" />
+              )}
+              <span>Nghe thử (200 ký tự)</span>
+            </button>
+
+            {/* Nút Tạo giọng nói chính */}
+            <button
+              type="button"
+              onClick={handleGenerateJob}
+              disabled={isJobRunning || isPreviewLoading || !text.trim() || isInsufficient}
+              className="flex items-center gap-2 px-5 py-2 rounded-control bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold shadow-md shadow-indigo-600/25 transition-all"
+              title={
+                isInsufficient
+                  ? 'Số dư credit không đủ. Vui lòng nạp thêm!'
+                  : 'Phím tắt: ⌘+Enter / Ctrl+Enter'
+              }
+            >
+              {isJobRunning ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Đang xử lý {jobProgress}%</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  <span>Tạo giọng nói</span>
+                  <span className="hidden sm:inline-block font-mono text-[10px] text-white/70 bg-white/10 px-1 py-0.2 rounded">
+                    ⌘↵
+                  </span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>
 
       {/* =========================================================================
-          CỘT PHẢI (320px, THU GỌN ĐƯỢC): TAB "CÀI ĐẶT" & TAB "LỊCH SỬ"
+          CỘT PHẢI: TAB "CẤU HÌNH" & TAB "LỊCH SỬ" (THEO GỢI Ý ẢNH 1 YUPVOX)
       ========================================================================= */}
       <div
-        className={`hidden lg:flex flex-col transition-all duration-150 rounded-card bg-white dark:bg-[#12151C] border border-slate-200 dark:border-white/[0.08] shadow-xs overflow-hidden flex-shrink-0 ${
-          rightPanelOpen ? 'w-[320px]' : 'w-12'
+        className={`hidden lg:flex flex-col h-full transition-all duration-150 rounded-2xl bg-white dark:bg-[#12151C] border border-slate-200 dark:border-white/[0.08] shadow-sm overflow-hidden flex-shrink-0 ${
+          rightPanelOpen ? 'w-[340px] xl:w-[370px]' : 'w-12'
         }`}
       >
-        {/* Header panel bên phải với nút toggle thu gọn */}
-        <div className="p-3 border-b border-slate-200 dark:border-white/[0.08] flex items-center justify-between bg-slate-50/70 dark:bg-[#0B0D12]/40">
+        {/* Header panel bên phải với Tabs Cấu hình | Lịch sử */}
+        <div className="flex-shrink-0 p-3 border-b border-slate-200 dark:border-white/[0.08] flex items-center justify-between bg-slate-50/70 dark:bg-[#0B0D12]/60">
           {rightPanelOpen ? (
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-[#181C25] p-0.5 rounded-control border border-slate-200 dark:border-white/[0.08] text-xs font-semibold w-full mr-2">
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-[#181C25] p-1 rounded-control border border-slate-200 dark:border-white/[0.08] text-xs font-semibold w-full mr-2">
               <button
+                type="button"
                 onClick={() => setRightPanelTab('settings')}
-                className={`flex-1 py-1 rounded-[8px] transition-all flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-1.5 rounded-[8px] transition-all flex items-center justify-center gap-1.5 ${
                   rightPanelTab === 'settings'
                     ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-xs'
-                    : 'text-slate-600 dark:text-white/40 hover:text-slate-900 dark:hover:text-white'
+                    : 'text-slate-600 dark:text-white/50 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                <Sliders className="w-3 h-3" />
-                <span>Cài đặt</span>
+                <Sliders className="w-3.5 h-3.5" />
+                <span>Cấu hình</span>
               </button>
 
               <button
+                type="button"
                 onClick={() => setRightPanelTab('history')}
-                className={`flex-1 py-1 rounded-[8px] transition-all flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-1.5 rounded-[8px] transition-all flex items-center justify-center gap-1.5 ${
                   rightPanelTab === 'history'
                     ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-xs'
-                    : 'text-slate-600 dark:text-white/40 hover:text-slate-900 dark:hover:text-white'
+                    : 'text-slate-600 dark:text-white/50 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                <History className="w-3 h-3" />
+                <History className="w-3.5 h-3.5" />
                 <span>Lịch sử ({recentJobs.length})</span>
               </button>
             </div>
           ) : (
             <div className="w-full flex justify-center">
-              <Sliders className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <Sliders className="w-4 h-4 text-indigo-500" />
             </div>
           )}
 
           <button
+            type="button"
             onClick={() => setRightPanelOpen(!rightPanelOpen)}
-            className="p-1 rounded text-slate-400 hover:text-slate-700 dark:text-white/40 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
-            title={rightPanelOpen ? 'Thu gọn panel' : 'Mở rộng panel'}
+            className="p-1.5 rounded text-slate-400 hover:text-slate-700 dark:text-white/40 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+            title={rightPanelOpen ? 'Thu gọn sidebar' : 'Mở rộng sidebar'}
           >
             {rightPanelOpen ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </button>
         </div>
 
-        {/* Nội dung Tab khi mở rộng */}
+        {/* Nội dung Tab khi sidebar mở rộng */}
         {rightPanelOpen && (
-          <div className="p-4 flex-1 overflow-y-auto space-y-6 scrollbar-thin">
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5 scrollbar-thin">
             {rightPanelTab === 'settings' ? (
-              /* TAB 1: CÀI ĐẶT */
-              <div className="space-y-5">
-                {/* 1. Bộ chọn giọng đọc */}
+              /* TAB 1: CẤU HÌNH GIỌNG ĐỌC & ÂM THANH */
+              <div className="space-y-5 animate-in fade-in duration-100">
+                {/* 1. Chọn giọng đọc */}
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider block">
-                    Giọng đọc hiện tại
+                    Chọn giọng đọc
                   </label>
                   <div
                     onClick={() => setIsVoicePickerOpen(true)}
                     className="p-3 rounded-control bg-slate-50 hover:bg-slate-100 dark:bg-[#181C25] dark:hover:bg-[#202532] border border-slate-200 dark:border-white/[0.08] hover:border-indigo-500/50 cursor-pointer transition-all group flex items-center justify-between"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xs flex-shrink-0">
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 text-white flex items-center justify-center font-bold text-xs shadow-xs flex-shrink-0">
                         {selectedVoice?.gender === 'Female' ? '♀' : '♂'}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{selectedVoiceName}</p>
+                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                          {selectedVoiceName}
+                        </p>
                         <p className="text-[10px] text-slate-500 dark:text-white/40 truncate">
-                          {selectedVoice?.locale_name || 'Tiếng Việt'}
+                          {selectedVoice?.locale_name || 'Vietnamese'} &middot;{' '}
+                          {selectedVoice?.gender === 'Female' ? 'Nữ' : 'Nam'}
                         </p>
                       </div>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-slate-400 dark:text-white/40 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
                   </div>
                 </div>
 
-                {/* 2. Thanh trượt âm thanh */}
-                <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider">
-                      Tinh chỉnh âm thanh
-                    </span>
+                {/* 2. Phong cách giọng đọc (Theo giao diện Yupvox) */}
+                <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
+                  <label className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider block">
+                    Phong cách giọng đọc
+                  </label>
+                  <div className="grid grid-cols-3 gap-1.5">
                     <button
-                      onClick={handleResetSliders}
-                      className="text-[11px] text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 flex items-center gap-1 font-medium"
+                      type="button"
+                      onClick={() => setVoiceStyle('story')}
+                      className={`px-2 py-2 rounded-control text-xs font-medium transition-all text-center border ${
+                        voiceStyle === 'story'
+                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold'
+                          : 'border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#181C25] text-slate-700 dark:text-white/70 hover:bg-slate-100'
+                      }`}
                     >
-                      <RotateCcw className="w-3 h-3" />
-                      <span>Đặt lại</span>
+                      Kể chuyện
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVoiceStyle('natural')}
+                      className={`px-2 py-2 rounded-control text-xs font-medium transition-all text-center border ${
+                        voiceStyle === 'natural'
+                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold'
+                          : 'border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#181C25] text-slate-700 dark:text-white/70 hover:bg-slate-100'
+                      }`}
+                    >
+                      Tự nhiên
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVoiceStyle('expressive')}
+                      className={`px-2 py-2 rounded-control text-xs font-medium transition-all text-center border ${
+                        voiceStyle === 'expressive'
+                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold'
+                          : 'border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#181C25] text-slate-700 dark:text-white/70 hover:bg-slate-100'
+                      }`}
+                    >
+                      Biểu cảm
                     </button>
                   </div>
+                </div>
 
-                  {/* Tốc độ */}
+                {/* 3. Tinh chỉnh Tốc độ đọc */}
+                <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
                   <SliderControl
-                    label="Tốc độ (Speed)"
+                    label="Tốc độ đọc"
                     value={rate}
                     min={-50}
                     max={100}
                     step={5}
-                    displayValue={`${(1 + rate / 100).toFixed(1)}x (${rate >= 0 ? '+' : ''}${rate}%)`}
-                    scaleLabels={['Chậm (0.5x)', 'Chuẩn (1.0x)', 'Nhanh (2.0x)']}
+                    displayValue={`${(1 + rate / 100).toFixed(2)}x`}
+                    scaleLabels={['Chậm hơn', 'Chuẩn', 'Nhanh hơn']}
                     onChange={setRate}
                   />
+                </div>
 
-                  {/* Cao độ */}
+                {/* 4. Các nút chèn cảm xúc & ngắt nghỉ nhanh (Theo giao diện Yupvox) */}
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => insertEmotionTag('cười', 'Cười')}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-control bg-slate-50 dark:bg-[#181C25] border border-slate-200 dark:border-white/[0.08] hover:border-amber-400 text-xs text-slate-700 dark:text-white/80 transition-colors"
+                    >
+                      <Smile className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Cười</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertEmotionTag('thở dài', 'Thở dài')}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-control bg-slate-50 dark:bg-[#181C25] border border-slate-200 dark:border-white/[0.08] hover:border-sky-400 text-xs text-slate-700 dark:text-white/80 transition-colors"
+                    >
+                      <Wind className="w-3.5 h-3.5 text-sky-500" />
+                      <span>Thở dài</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertEmotionTag('hắng giọng', 'Hắng giọng')}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-control bg-slate-50 dark:bg-[#181C25] border border-slate-200 dark:border-white/[0.08] hover:border-emerald-400 text-xs text-slate-700 dark:text-white/80 transition-colors"
+                    >
+                      <Mic className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>Hắng giọng</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => insertPause(1000)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-control bg-slate-50 dark:bg-[#181C25] border border-slate-200 dark:border-white/[0.08] hover:border-indigo-400 text-xs text-slate-700 dark:text-white/80 transition-colors"
+                    >
+                      <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Tạm dừng...</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 5. Cao độ & Âm lượng */}
+                <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
                   <SliderControl
                     label="Cao độ (Pitch)"
                     value={pitch}
@@ -1014,7 +1036,6 @@ export default function TextToSpeech() {
                     onChange={setPitch}
                   />
 
-                  {/* Âm lượng */}
                   <SliderControl
                     label="Âm lượng (Volume)"
                     value={volume}
@@ -1027,8 +1048,8 @@ export default function TextToSpeech() {
                   />
                 </div>
 
-                {/* 3. Định dạng đầu ra (MP3 vs WAV) */}
-                <div className="pt-2 border-t border-slate-100 dark:border-white/[0.06] space-y-2.5">
+                {/* 6. Định dạng đầu ra */}
+                <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
                   <label className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider block">
                     Định dạng đầu ra
                   </label>
@@ -1038,19 +1059,17 @@ export default function TextToSpeech() {
                       onClick={() => setOutputFormat('mp3')}
                       className={`p-2.5 rounded-control border text-left transition-all ${
                         outputFormat === 'mp3'
-                          ? 'border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold'
+                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold'
                           : 'border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#181C25] text-slate-700 dark:text-white/70'
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs">Audio MP3</span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 font-bold">
+                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-600 font-bold">
                           Chuẩn
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-500 dark:text-white/40 mt-1">
-                        24kHz &middot; 48kbps
-                      </p>
+                      <p className="text-[10px] text-slate-500 dark:text-white/40 mt-1">24kHz &middot; 48kbps</p>
                     </button>
 
                     <button
@@ -1058,7 +1077,7 @@ export default function TextToSpeech() {
                       onClick={() => setOutputFormat('wav')}
                       className={`p-2.5 rounded-control border text-left transition-all ${
                         outputFormat === 'wav'
-                          ? 'border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold'
+                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold'
                           : 'border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#181C25] text-slate-700 dark:text-white/70'
                       }`}
                     >
@@ -1068,22 +1087,16 @@ export default function TextToSpeech() {
                           Lossless
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-500 dark:text-white/40 mt-1">
-                        24kHz &middot; 16-bit PCM
-                      </p>
+                      <p className="text-[10px] text-slate-500 dark:text-white/40 mt-1">24kHz &middot; 16-bit PCM</p>
                     </button>
                   </div>
                 </div>
 
-                {/* 4. Tuỳ chọn Từ điển phát âm */}
+                {/* 7. Áp dụng từ điển phát âm */}
                 <div className="pt-2 border-t border-slate-100 dark:border-white/[0.06] flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-bold text-slate-800 dark:text-white">
-                      Áp dụng từ điển phát âm
-                    </p>
-                    <p className="text-[10px] text-slate-500 dark:text-white/40">
-                      Tự động thay thế từ viết tắt, tên riêng
-                    </p>
+                    <p className="text-xs font-bold text-slate-800 dark:text-white">Áp dụng từ điển phát âm</p>
+                    <p className="text-[10px] text-slate-500 dark:text-white/40">Tự động chuẩn hóa từ viết tắt & số</p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
@@ -1095,53 +1108,173 @@ export default function TextToSpeech() {
                     <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-white/10 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                   </label>
                 </div>
+
+                {/* 8. Nút Đặt lại mục định */}
+                <div className="pt-2 border-t border-slate-100 dark:border-white/[0.06] text-right">
+                  <button
+                    type="button"
+                    onClick={handleResetSliders}
+                    className="text-xs text-slate-500 hover:text-indigo-600 dark:text-white/50 dark:hover:text-indigo-400 inline-flex items-center gap-1 font-medium transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Đặt lại mặc định</span>
+                  </button>
+                </div>
               </div>
             ) : (
-              /* TAB 2: LỊCH SỬ PHIÊN */
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider">
-                    Các bản ghi gần đây
-                  </span>
-                  {recentJobs.length > 0 && (
+              /* TAB 2: LỊCH SỬ XỬ LÝ (CHUYỂN TOÀN BỘ VÀO SIDEBAR PHẢI NHƯ ẢNH 1) */
+              <div className="space-y-3 animate-in fade-in duration-100">
+                {/* Search & Refresh */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <div className="relative flex-1">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={historySearch}
+                        onChange={(e) => setHistorySearch(e.target.value)}
+                        placeholder="Tìm kiếm theo nội dung, ID..."
+                        className="w-full bg-slate-50 dark:bg-[#181C25] border border-slate-200 dark:border-white/[0.08] rounded-control pl-8 pr-2.5 py-1.5 text-xs text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 focus:outline-none focus:border-indigo-500"
+                      />
+                      {historySearch && (
+                        <button
+                          onClick={() => setHistorySearch('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                     <button
+                      type="button"
                       onClick={fetchRecentJobs}
-                      className="text-[11px] text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 font-medium"
+                      disabled={isFetchingRecentJobs}
+                      className="p-2 rounded-control text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-white/50 dark:hover:text-white dark:hover:bg-white/5 border border-slate-200 dark:border-white/[0.08] disabled:opacity-50 transition-colors"
+                      title="Làm mới lịch sử"
                     >
-                      Làm mới
+                      <RefreshCw className={`w-3.5 h-3.5 ${isFetchingRecentJobs ? 'animate-spin' : ''}`} />
                     </button>
-                  )}
+                  </div>
                 </div>
 
-                {recentJobs.length === 0 ? (
-                  <p className="text-xs text-slate-400 dark:text-white/40 text-center py-8">
-                    Chưa có bản ghi nào trong lịch sử gần đây.
-                  </p>
+                {/* Danh sách các bản ghi */}
+                {filteredJobs.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400 dark:text-white/30 space-y-2">
+                    <History className="w-8 h-8 mx-auto opacity-30" />
+                    <p className="text-xs">
+                      {historySearch ? 'Không tìm thấy bản ghi phù hợp.' : 'Chưa có bản ghi nào gần đây.'}
+                    </p>
+                  </div>
                 ) : (
-                  recentJobs.map((item) => (
-                    <div
-                      key={item.id}
-                      onClick={() => item.status === 'done' && handleReplayJob(item)}
-                      className="p-3 rounded-control bg-slate-50 hover:bg-slate-100 dark:bg-[#181C25] dark:hover:bg-[#1e232f] border border-slate-200 dark:border-white/[0.06] cursor-pointer transition-colors space-y-2 group"
-                    >
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="font-semibold text-slate-900 dark:text-white/90 truncate max-w-[180px]">
-                          {voices.find((v) => v.id === item.voice)?.name || item.voice}
-                        </span>
-                        <span className="text-slate-500 dark:text-white/40 font-mono text-[10px]">
-                          {item.duration ? `${item.duration.toFixed(1)}s` : '--'}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-600 dark:text-white/60 line-clamp-2 leading-relaxed">
-                        {item.text}
-                      </p>
-                      <div className="flex items-center justify-between pt-1 text-[10px] text-indigo-600 dark:text-indigo-400 group-hover:underline font-medium">
-                        <span>Bấm để nạp lại cài đặt</span>
-                        <Play className="w-3 h-3 fill-current" />
-                      </div>
-                    </div>
-                  ))
+                  <div className="space-y-2.5">
+                    {filteredJobs.map((item) => {
+                      const itemVoice = voices.find((v) => v.id === item.voice)?.name || item.voice
+                      const isDone = item.status === 'done'
+
+                      return (
+                        <div
+                          key={item.id}
+                          className="p-3 rounded-control bg-slate-50 hover:bg-slate-100 dark:bg-[#181C25] dark:hover:bg-[#1e232f] border border-slate-200/80 dark:border-white/[0.06] transition-all space-y-2 group"
+                        >
+                          {/* Dòng 1: Giọng đọc + Trạng thái + Thời lượng */}
+                          <div className="flex items-center justify-between text-[11px]">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="font-bold text-slate-900 dark:text-white truncate max-w-[140px]">
+                                {itemVoice}
+                              </span>
+                              <span className="text-[10px] uppercase font-mono px-1 rounded bg-slate-200/70 dark:bg-white/10 text-slate-600 dark:text-white/70">
+                                {item.format || 'mp3'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {isDone && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  <span>{item.duration ? `${item.duration.toFixed(1)}s` : 'OK'}</span>
+                                </span>
+                              )}
+                              {item.status === 'processing' && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] font-mono text-indigo-600 dark:text-indigo-400">
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                  <span>{item.progress}%</span>
+                                </span>
+                              )}
+                              {item.status === 'failed' && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-rose-500">
+                                  <AlertTriangle className="w-3 h-3" />
+                                  <span>Lỗi</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Dòng 2: Nội dung văn bản tóm tắt */}
+                          <p
+                            className="text-xs text-slate-600 dark:text-white/70 line-clamp-2 leading-relaxed cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400"
+                            title={item.text}
+                            onClick={() => isDone && handleReplayJob(item)}
+                          >
+                            {item.text}
+                          </p>
+
+                          {/* Dòng 3: Thao tác Nghe, Nạp lại, Tải về */}
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 dark:border-white/[0.04] text-[11px]">
+                            <span className="text-[10px] font-mono text-amber-500 font-semibold">
+                              {item.credit_used ?? item.char_count} credits
+                            </span>
+
+                            <div className="flex items-center gap-1">
+                              {/* Nút Nghe phát */}
+                              {isDone && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleReplayJob(item)}
+                                  className="p-1 rounded text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-white/5 transition-colors"
+                                  title="Nghe lại bản ghi này"
+                                >
+                                  <Play className="w-3.5 h-3.5 fill-current" />
+                                </button>
+                              )}
+
+                              {/* Nút Nạp vào editor */}
+                              <button
+                                type="button"
+                                onClick={() => handleLoadJobIntoEditor(item)}
+                                className="px-1.5 py-0.5 rounded text-[10px] font-medium text-slate-600 hover:text-slate-900 dark:text-white/70 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors"
+                                title="Nạp văn bản vào ô soạn thảo"
+                              >
+                                Nạp lại
+                              </button>
+
+                              {/* Nút tải về nếu hoàn thành */}
+                              {isDone && (
+                                <a
+                                  href={`/api/tts/jobs/${item.id}/audio?download=true`}
+                                  download
+                                  className="p-1 rounded text-slate-500 hover:text-slate-900 dark:text-white/50 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                                  title="Tải tệp âm thanh"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 )}
+
+                {/* Link sang trang lịch sử đầy đủ */}
+                <div className="pt-2 border-t border-slate-100 dark:border-white/[0.06] text-center">
+                  <Link
+                    to="/history"
+                    className="text-xs text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 inline-flex items-center gap-1 font-semibold hover:underline"
+                  >
+                    <span>Xem toàn bộ lịch sử chi tiết</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </Link>
+                </div>
               </div>
             )}
           </div>
@@ -1173,8 +1306,8 @@ export default function TextToSpeech() {
                 min={-50}
                 max={100}
                 step={5}
-                displayValue={`${(1 + rate / 100).toFixed(1)}x (${rate >= 0 ? '+' : ''}${rate}%)`}
-                scaleLabels={['Chậm (0.5x)', 'Chuẩn (1.0x)', 'Nhanh (2.0x)']}
+                displayValue={`${(1 + rate / 100).toFixed(2)}x`}
+                scaleLabels={['Chậm hơn', 'Chuẩn', 'Nhanh hơn']}
                 onChange={setRate}
               />
               <SliderControl
