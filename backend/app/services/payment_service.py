@@ -176,22 +176,25 @@ class PaymentService:
 
     @classmethod
     async def seed_defaults_if_empty(cls, db: AsyncSession) -> None:
-        """Khởi tạo các gói cước và mã giảm giá mặc định nếu bảng đang rỗng."""
-        res = await db.execute(select(func.count(PricingPlan.id)))
-        if (res.scalar() or 0) == 0:
-            for item in DEFAULT_PLANS:
-                plan = PricingPlan(**item)
-                db.add(plan)
-            await db.commit()
-            logger.info("Đã khởi tạo các gói dịch vụ mặc định vào database.")
+        """Khởi tạo các gói cước và mã giảm giá mặc định nếu chưa tồn tại."""
+        changed = False
+        for item in DEFAULT_PLANS:
+            stmt = select(PricingPlan).where(PricingPlan.code == item["code"])
+            res = await db.execute(stmt)
+            if not res.scalar_one_or_none():
+                db.add(PricingPlan(**item))
+                changed = True
 
-        res_cp = await db.execute(select(func.count(Coupon.id)))
-        if (res_cp.scalar() or 0) == 0:
-            for cp_data in DEFAULT_COUPONS:
-                coupon = Coupon(**cp_data)
-                db.add(coupon)
+        for cp_data in DEFAULT_COUPONS:
+            stmt_cp = select(Coupon).where(Coupon.code == cp_data["code"])
+            res_cp = await db.execute(stmt_cp)
+            if not res_cp.scalar_one_or_none():
+                db.add(Coupon(**cp_data))
+                changed = True
+
+        if changed:
             await db.commit()
-            logger.info("Đã khởi tạo các mã giảm giá mặc định vào database.")
+            logger.info("Đã khởi tạo các gói dịch vụ và mã giảm giá mặc định.")
 
     # --- Quản lý Gói dịch vụ (Plans) ---
 

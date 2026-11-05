@@ -18,6 +18,7 @@ from app.services.audio_service import AudioService
 from app.services.auth_service import AuthService
 from app.services.credit_service import CreditService, CreditTransactionType, InsufficientCreditsError
 from app.services.dictionary_service import DictionaryService
+from app.services.payment_service import PaymentService
 from app.services.storage_service import StorageService
 from app.services.text_splitter import split_text_into_chunks
 from app.storage.local import LocalStorage
@@ -1178,6 +1179,7 @@ async def test_payment_routes_extra_branches():
 
         # Tạo admin
         async with AsyncSessionLocal() as db:
+            await PaymentService.seed_defaults_if_empty(db)
             admin_user = User(
                 email=f"admin_extra_{time.time()}@example.com",
                 hashed_password=hash_password("AdminPass123!"),
