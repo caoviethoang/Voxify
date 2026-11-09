@@ -119,14 +119,25 @@ class MockCloneProvider(CloneProvider):
                 volume=volume,
             )
         except Exception as exc:
-            logger.warning(
-                f"MockCloneProvider: EdgeTTS không khả dụng ({exc}), dự phòng tạo âm thanh offline."
-            )
-            fake = FakeTTSProvider()
-            return await fake.synthesize(
-                text=text,
-                voice=provider_voice_id,
-                rate=rate,
-                pitch=pitch,
-                volume=volume,
-            )
+            # Nếu giọng nữ (HoaiMy) gặp lỗi trên server, tự động fallback sang giọng nam NamMinh ổn định hơn
+            if edge_voice != "vi-VN-NamMinhNeural" and "vi" in str(language).lower():
+                logger.warning(
+                    f"MockCloneProvider: {edge_voice} gặp lỗi ({exc}), tự động thử lại với vi-VN-NamMinhNeural."
+                )
+                try:
+                    from app.providers.edge import EdgeTTSProvider
+
+                    edge_provider = EdgeTTSProvider()
+                    return await edge_provider.synthesize(
+                        text=text,
+                        voice="vi-VN-NamMinhNeural",
+                        rate=rate,
+                        pitch=pitch,
+                        volume=volume,
+                    )
+                except Exception as inner_exc:
+                    logger.error(f"MockCloneProvider: Thử lại với NamMinh thất bại: {inner_exc}")
+                    raise inner_exc from exc
+
+            logger.error(f"MockCloneProvider: EdgeTTS không thể tổng hợp: {exc}")
+            raise exc
