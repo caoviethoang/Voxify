@@ -199,7 +199,44 @@ async def stream_preview_audio(
     if not voice or not voice.is_active:
         raise HTTPException(status_code=404, detail="Giọng clone không tồn tại hoặc đã bị xóa.")
 
+    # Tự động tạo lại preview nếu file thiếu hoặc là file cũ giả lập (< 5KB)
+    need_regenerate = (
+        not voice.preview_audio_path
+        or not os.path.exists(voice.preview_audio_path)
+        or os.path.getsize(voice.preview_audio_path) < 5000
+    )
+    if need_regenerate:
+        try:
+            prev_text = f"Xin chào, đây là giọng đọc AI của {voice.name} đã được tạo thành công trên Voxify."
+            prev_bytes = await _clone_service.synthesize_cloned_voice(
+                db=db,
+                voice_id=voice.voice_id,
+                user=voice.user,
+                text=prev_text,
+            )
+            previews_dir = Path("storage/clones/previews")
+            previews_dir.mkdir(parents=True, exist_ok=True)
+            target_path = str(previews_dir / f"{voice.voice_id}_preview.mp3")
+            with open(target_path, "wb") as f_prev:
+                f_prev.write(prev_bytes)
+            voice.preview_audio_path = target_path
+            await db.commit()
+        except Exception as e:
+            logger.warning(f"Không thể tái tạo preview cho {voice_id}: {e}")
+            if voice.audio_sample_path and os.path.exists(voice.audio_sample_path):
+                return FileResponse(
+                    voice.audio_sample_path,
+                    media_type="audio/mpeg",
+                    filename=f"{voice.name}_sample.mp3",
+                )
+
     if not voice.preview_audio_path or not os.path.exists(voice.preview_audio_path):
+        if voice.audio_sample_path and os.path.exists(voice.audio_sample_path):
+            return FileResponse(
+                voice.audio_sample_path,
+                media_type="audio/mpeg",
+                filename=f"{voice.name}_sample.mp3",
+            )
         raise HTTPException(status_code=404, detail="Không tìm thấy tệp nghe thử của giọng này.")
 
     return FileResponse(
