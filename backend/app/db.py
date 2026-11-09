@@ -8,12 +8,21 @@ from app.config import get_settings
 
 settings = get_settings()
 
+is_sqlite = "sqlite" in settings.database_url
+is_memory = ":memory:" in settings.database_url
+
+connect_args = {"check_same_thread": False, "timeout": 30.0} if is_sqlite else {}
+pool_kwargs = {}
+if is_memory:
+    from sqlalchemy.pool import StaticPool
+    pool_kwargs["poolclass"] = StaticPool
+
 # Engine async — tự động dùng SQLite hay PostgreSQL theo DATABASE_URL
 engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
-    # Với SQLite cần check_same_thread=False
-    connect_args={"check_same_thread": False, "timeout": 30.0} if "sqlite" in settings.database_url else {},
+    connect_args=connect_args,
+    **pool_kwargs,
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -47,11 +56,12 @@ async def create_tables() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
         # Nếu là SQLite, tự động bổ sung cột thiếu mà create_all không hỗ trợ cho bảng có sẵn
-        if "sqlite" in settings.database_url:
+        if is_sqlite:
             def _sync_sqlite_columns(sync_conn):
                 from sqlalchemy import text
-                sync_conn.execute(text("PRAGMA journal_mode=WAL"))
-                sync_conn.execute(text("PRAGMA busy_timeout=5000"))
+                if not is_memory:
+                    sync_conn.execute(text("PRAGMA journal_mode=WAL"))
+                    sync_conn.execute(text("PRAGMA busy_timeout=5000"))
                 user_cols = [r[1] for r in sync_conn.execute(text("PRAGMA table_info(users)")).fetchall()]
                 if user_cols and "credit_balance" not in user_cols:
                     sync_conn.execute(text("ALTER TABLE users ADD COLUMN credit_balance INTEGER NOT NULL DEFAULT 10000"))
