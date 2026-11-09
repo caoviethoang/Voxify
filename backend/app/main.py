@@ -23,6 +23,7 @@ from app.routes import (
     history_router,
     payment_router,
     tts_router,
+    voice_clone_router,
     voices_router,
 )
 from app.routes.history import cleanup_old_generations
@@ -109,6 +110,7 @@ app.include_router(config_router)
 app.include_router(credit_router)
 app.include_router(dictionary_router)
 app.include_router(voices_router)
+app.include_router(voice_clone_router)
 app.include_router(tts_router)
 app.include_router(history_router)
 app.include_router(payment_router)

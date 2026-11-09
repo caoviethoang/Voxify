@@ -145,21 +145,28 @@ export default function TextToSpeech() {
   const [replaySrtUrl, setReplaySrtUrl] = useState<string | undefined>()
   const [replayVttUrl, setReplayVttUrl] = useState<string | undefined>()
 
+  const location = useLocation()
   const voices = voiceData?.voices ?? []
 
-  // Khởi tạo giọng mặc định
+  // Khởi tạo giọng mặc định hoặc từ URL param
   useEffect(() => {
-    if (!selectedVoiceId && config?.default_voice) {
+    const params = new URLSearchParams(location.search)
+    const voiceParam = params.get('voice')
+    if (voiceParam) {
+      setSelectedVoiceId(voiceParam)
+    } else if (!selectedVoiceId && config?.default_voice) {
       setSelectedVoiceId(config.default_voice)
     } else if (!selectedVoiceId && voices.length > 0) {
       setSelectedVoiceId(voices[0].id)
     }
-  }, [config?.default_voice, voices, selectedVoiceId])
+  }, [location.search, config?.default_voice, voices, selectedVoiceId])
 
+  const isClonedVoice = selectedVoiceId.startsWith('clone_')
   const selectedVoice = voices.find((v) => v.id === selectedVoiceId)
-  const selectedVoiceName = selectedVoice?.name ?? selectedVoiceId
+  const selectedVoiceName = isClonedVoice
+    ? (selectedVoiceId.split('_').slice(3, -1).join(' ').replace(/_/g, ' ') || 'Giọng clone cá nhân')
+    : (selectedVoice?.name ?? selectedVoiceId)
 
-  const location = useLocation()
   const appliedJobIdRef = useRef<number | null>(null)
 
   // Khôi phục văn bản và cài đặt khi người dùng bấm "Mở lại" từ trang Lịch sử
@@ -239,8 +246,9 @@ export default function TextToSpeech() {
     }
   }, [isJobRunning, activeJob?.status, fetchRecentJobs, refreshUser, toast])
 
-  // Ước tính số credit tiêu tốn (1 credit = 1 ký tự)
-  const estimatedCredits = text.length
+  // Ước tính số credit tiêu tốn (1 credit = 1 ký tự, 1.5x nếu dùng giọng clone)
+  const creditMultiplier = isClonedVoice ? 1.5 : 1.0
+  const estimatedCredits = Math.ceil(text.length * creditMultiplier)
   const userBalance = user?.credits ?? 0
   const isInsufficient = text.trim().length > 0 && estimatedCredits > userBalance
 
@@ -778,6 +786,11 @@ export default function TextToSpeech() {
                   ) : (
                     <span className="text-slate-400 dark:text-white/40">
                       ~{estimatedCredits.toLocaleString('vi-VN')} credit
+                      {isClonedVoice && (
+                        <span className="ml-1 text-purple-600 dark:text-purple-400 font-semibold">
+                          (Clone x1.5)
+                        </span>
+                      )}
                     </span>
                   )}
                 </div>
@@ -912,16 +925,30 @@ export default function TextToSpeech() {
                     className="p-3 rounded-control bg-slate-50 hover:bg-slate-100 dark:bg-[#181C25] dark:hover:bg-[#202532] border border-slate-200 dark:border-white/[0.08] hover:border-indigo-500/50 cursor-pointer transition-all group flex items-center justify-between"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 text-white flex items-center justify-center font-bold text-xs shadow-xs flex-shrink-0">
-                        {selectedVoice?.gender === 'Female' ? '♀' : '♂'}
+                      <div
+                        className={`w-9 h-9 rounded-full ${
+                          isClonedVoice
+                            ? 'bg-gradient-to-tr from-purple-600 to-indigo-600 text-white'
+                            : 'bg-gradient-to-tr from-indigo-500 to-purple-500 text-white'
+                        } flex items-center justify-center font-bold text-xs shadow-xs flex-shrink-0`}
+                      >
+                        {isClonedVoice ? '✨' : selectedVoice?.gender === 'Female' ? '♀' : '♂'}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                          {selectedVoiceName}
-                        </p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                            {selectedVoiceName}
+                          </p>
+                          {isClonedVoice && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                              Clone
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[10px] text-slate-500 dark:text-white/40 truncate">
-                          {selectedVoice?.locale_name || 'Vietnamese'} &middot;{' '}
-                          {selectedVoice?.gender === 'Female' ? 'Nữ' : 'Nam'}
+                          {isClonedVoice
+                            ? 'Giọng đọc clone cá nhân · x1.5 credit'
+                            : `${selectedVoice?.locale_name || 'Vietnamese'} · ${selectedVoice?.gender === 'Female' ? 'Nữ' : 'Nam'}`}
                         </p>
                       </div>
                     </div>

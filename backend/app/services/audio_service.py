@@ -45,6 +45,114 @@ class AudioService:
             return 0.0
 
     @classmethod
+    async def validate_voice_sample(
+        cls,
+        file_path: str,
+        min_duration: float = 5.0,
+        max_duration: float = 30.0,
+    ) -> Dict[str, Any]:
+        """
+        Kiểm tra chất lượng mẫu âm thanh cho Clone giọng nói (Prompt 10 / Issue #12):
+        - Độ dài mẫu: 5.0s – 30.0s
+        - Mức độ âm lượng và độ ồn (volumedetect qua ffmpeg)
+        - Điểm chất lượng mẫu (1.0 – 5.0 sao)
+        """
+        if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+            return {
+                "valid": False,
+                "duration": 0.0,
+                "quality_score": 0.0,
+                "error": "Tệp âm thanh trống hoặc không tồn tại.",
+            }
+
+        # 1. Đo thời lượng bằng ffprobe
+        duration = cls.measure_duration(file_path)
+        if duration < min_duration:
+            return {
+                "valid": False,
+                "duration": round(duration, 2),
+                "quality_score": 1.0,
+                "error": f"Mẫu âm thanh quá ngắn ({duration:.1f}s). Yêu cầu tối thiểu {min_duration:.0f} giây để mô hình học âm sắc.",
+            }
+        if duration > max_duration:
+            return {
+                "valid": False,
+                "duration": round(duration, 2),
+                "quality_score": 1.0,
+                "error": f"Mẫu âm thanh quá dài ({duration:.1f}s). Yêu cầu tối đa {max_duration:.0f} giây.",
+            }
+
+        # 2. Phân tích mức âm lượng / độ nhiễu bằng ffmpeg volumedetect
+        mean_volume = -25.0
+        max_volume = -3.0
+        try:
+            cmd = [
+                "ffmpeg",
+                "-i", file_path,
+                "-af", "volumedetect",
+                "-vn", "-sn", "-dn",
+                "-f", "null",
+                "/dev/null",
+            ]
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await proc.communicate()
+            err_text = stderr.decode("utf-8", errors="ignore")
+
+            for line in err_text.splitlines():
+                if "mean_volume:" in line:
+                    parts = line.split("mean_volume:")[1].split("dB")[0].strip()
+                    mean_volume = float(parts)
+                elif "max_volume:" in line:
+                    parts = line.split("max_volume:")[1].split("dB")[0].strip()
+                    max_volume = float(parts)
+        except Exception as e:
+            logger.warning(f"Không thể chạy ffmpeg volumedetect cho file {file_path}: {e}")
+
+        # Kiểm tra âm thanh câm / quá nhỏ
+        if mean_volume < -50.0:
+            return {
+                "valid": False,
+                "duration": round(duration, 2),
+                "mean_volume_db": mean_volume,
+                "max_volume_db": max_volume,
+                "quality_score": 1.0,
+                "error": "Mẫu âm thanh quá nhỏ hoặc gần như im lặng (dưới -50 dB). Vui lòng nói to và rõ hơn.",
+            }
+
+        # 3. Tính điểm chất lượng (1.0 - 5.0)
+        score = 4.0
+        # Thời lượng lý tưởng: 10s - 25s
+        if 10.0 <= duration <= 25.0:
+            score += 0.5
+        elif duration < 7.0:
+            score -= 0.5
+
+        # Âm lượng lý tưởng: mean_volume giữa -28 dB và -16 dB
+        if -28.0 <= mean_volume <= -16.0:
+            score += 0.5
+        elif mean_volume < -38.0:
+            score -= 0.5
+
+        # Tránh clipping quá lớn
+        if max_volume >= 0.0:
+            score -= 0.3
+
+        quality_score = max(1.0, min(5.0, round(score, 1)))
+
+        return {
+            "valid": True,
+            "duration": round(duration, 2),
+            "mean_volume_db": round(mean_volume, 1),
+            "max_volume_db": round(max_volume, 1),
+            "quality_score": quality_score,
+            "error": None,
+        }
+
+    @classmethod
     async def concat_audio_files(
         cls,
         file_paths: List[str],

@@ -64,7 +64,20 @@ class Settings(BaseSettings):
         "edge": 1.0,
         "azure": 1.2,
         "elevenlabs": 2.0,
+        "clone": 1.5,
     }
+
+    # Clone giọng nói (Voice Cloning)
+    clone_provider: str = "mock"  # "mock" | "elevenlabs" | "xtts" | "f5tts"
+    elevenlabs_api_key: str = ""
+    xtts_api_url: str = ""
+    f5tts_api_url: str = ""
+    clone_creation_fee: int = 500  # Phí tạo 1 voice clone (credits)
+    clone_voice_multiplier: float = 1.5  # Hệ số nhân credit khi đọc bằng giọng clone
+    clone_storage_path: str = "./storage/clones"
+    max_cloned_voices_free: int = 1
+    max_cloned_voices_pro: int = 5
+    max_cloned_voices_vip: int = 20
 
     # Cổng thanh toán & VietQR
     vietqr_bank_id: str = "MB"  # Mã ngân hàng (MB, VCB, TCB, ACB, ...)

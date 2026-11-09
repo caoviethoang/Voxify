@@ -325,22 +325,27 @@ export default function Sidebar({
                 {!isCollapsedMode && <span>Thư viện giọng</span>}
               </NavLink>
 
-              <div
-                title="Giọng của tôi (Sắp ra mắt)"
-                className={`flex items-center rounded-control text-xs text-slate-400 dark:text-white/30 cursor-not-allowed select-none ${
-                  isCollapsedMode ? 'justify-center py-2.5 px-0' : 'justify-between px-2.5 py-2'
-                }`}
+              <NavLink
+                to="/voices?tab=cloned"
+                onClick={handleLinkClick}
+                className={() =>
+                  `flex items-center rounded-control text-xs font-semibold transition-all ${
+                    isCollapsedMode ? 'justify-center py-2.5 px-0' : 'gap-2.5 px-2.5 py-2'
+                  } ${
+                    location.pathname === '/voices' && location.search.includes('tab=cloned')
+                      ? 'bg-purple-50 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-white/70 dark:hover:text-white dark:hover:bg-[#12151C]'
+                  }`
+                }
               >
-                <div className={`flex items-center ${isCollapsedMode ? 'justify-center' : 'gap-2.5'}`}>
-                  <Disc className="w-4 h-4 flex-shrink-0 text-slate-400 dark:text-white/30" />
-                  {!isCollapsedMode && <span>Giọng của tôi</span>}
-                </div>
+                <Disc className="w-4 h-4 flex-shrink-0 text-purple-500 dark:text-purple-400" />
+                {!isCollapsedMode && <span>Giọng của tôi</span>}
                 {!isCollapsedMode && (
-                  <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200 dark:bg-white/[0.06] dark:text-white/40 dark:border-white/[0.08]">
-                    Sắp ra mắt
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 ml-auto">
+                    Clone
                   </span>
                 )}
-              </div>
+              </NavLink>
 
               <div
                 title="Thay đổi giọng (Sắp ra mắt)"

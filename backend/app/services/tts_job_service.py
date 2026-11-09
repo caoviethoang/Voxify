@@ -83,6 +83,29 @@ class TTSJobService:
                     status_code=402,
                 )
 
+        # Kiểm tra tính hợp lệ nếu là giọng clone
+        if voice.startswith("clone_"):
+            from app.models.cloned_voice import ClonedVoice
+            stmt_clone = (
+                select(ClonedVoice)
+                .where(ClonedVoice.voice_id == voice)
+                .where(ClonedVoice.is_active.is_(True))
+            )
+            res_clone = await db.execute(stmt_clone)
+            clone_rec = res_clone.scalar_one_or_none()
+            if not clone_rec or clone_rec.status != "ready":
+                raise AppError(
+                    code="VOICE_NOT_FOUND",
+                    message="Giọng clone không tồn tại hoặc đã bị xóa.",
+                    status_code=404,
+                )
+            if user and not user.is_admin and clone_rec.user_id != user.id:
+                raise AppError(
+                    code="FORBIDDEN_VOICE",
+                    message="Bạn không có quyền sử dụng giọng clone cá nhân này.",
+                    status_code=403,
+                )
+
         # Tạo bản ghi Generation
         target_format = "wav" if output_format.lower() == "wav" else "mp3"
         generation = Generation(
@@ -191,15 +214,28 @@ class TTSJobService:
                         macro_chunks = self._split_macro_chunks(speech_text, max_chars=_MACRO_CHUNK_SIZE)
 
                         for chunk_sub_idx, chunk_text in enumerate(macro_chunks):
-                            # Gọi TTS Service tổng hợp
-                            audio_bytes = await self.tts.synthesize(
-                                text=chunk_text,
-                                voice=speech_voice,
-                                rate=job.rate,
-                                pitch=job.pitch,
-                                volume=job.volume,
-                                preview=False,
-                            )
+                            # Gọi TTS Service hoặc Clone Service tổng hợp
+                            if speech_voice.startswith("clone_"):
+                                from app.services.voice_clone_service import VoiceCloneService
+                                clone_svc = VoiceCloneService()
+                                audio_bytes = await clone_svc.synthesize_cloned_voice(
+                                    db=db,
+                                    voice_id=speech_voice,
+                                    user=None,
+                                    text=chunk_text,
+                                    rate=job.rate,
+                                    pitch=job.pitch,
+                                    volume=job.volume,
+                                )
+                            else:
+                                audio_bytes = await self.tts.synthesize(
+                                    text=chunk_text,
+                                    voice=speech_voice,
+                                    rate=job.rate,
+                                    pitch=job.pitch,
+                                    volume=job.volume,
+                                    preview=False,
+                                )
 
                             chunk_file = str(temp_dir / f"chunk_{block_idx}_{chunk_sub_idx}.mp3")
                             with open(chunk_file, "wb") as f_chunk:

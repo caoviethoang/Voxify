@@ -16,6 +16,7 @@ class CreditTransactionType(str, enum.Enum):
     REFUND = "refund"
     ADMIN_ADJUST = "admin_adjust"
     AFFILIATE = "affiliate"
+    VOICE_CLONE = "voice_clone"
 
 
 class CreditTransaction(Base):
