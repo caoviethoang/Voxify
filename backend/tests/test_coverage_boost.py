@@ -1049,6 +1049,52 @@ async def test_edge_tts_provider_offline_unit():
         audio = await provider.synthesize("Xin chào buổi sáng", "vi-VN-HoaiMyNeural")
         assert audio == b"frame_1frame_2"
 
+    # 6. synthesize with retry fallback to alternate voice
+    call_count = 0
+    with patch("edge_tts.Communicate") as mock_comm:
+        instance = MagicMock()
+        async def mock_stream_flaky():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise Exception("Simulated connection drop")
+            yield {"type": "audio", "data": b"recovered_audio"}
+        instance.stream = mock_stream_flaky
+        mock_comm.return_value = instance
+
+        audio = await provider._synthesize_chunk("Đoạn test thử lại khi gặp sự cố", "vi-VN-NamMinhNeural", "+0%", "+0Hz", "+0%", 1, 1)
+        assert audio == b"recovered_audio"
+
+    # 7. synthesize with sub-splitting on persistent failure
+    with patch("edge_tts.Communicate") as mock_comm:
+        instance = MagicMock()
+        sub_call = 0
+        async def mock_stream_subsplit():
+            nonlocal sub_call
+            sub_call += 1
+            # First 3 attempts for full 90-char text fail, then sub-chunks succeed
+            if sub_call <= 3:
+                raise Exception("Persistent error")
+            yield {"type": "audio", "data": b"sub_audio_chunk"}
+        instance.stream = mock_stream_subsplit
+        mock_comm.return_value = instance
+
+        long_failing_text = "Đây là một đoạn văn bản tiếng Việt dài hơn 80 ký tự để kích hoạt cơ chế chia nhỏ khi bị lỗi."
+        audio = await provider._synthesize_chunk(long_failing_text, "vi-VN-HoaiMyNeural", "+0%", "+0Hz", "+0%", 1, 1)
+        assert len(audio) > 0
+
+    # 8. synthesize with complete failure raising RuntimeError
+    with patch("edge_tts.Communicate") as mock_comm:
+        instance = MagicMock()
+        async def mock_stream_fail():
+            raise Exception("Fatal network failure")
+            yield {"type": "audio", "data": b""}
+        instance.stream = mock_stream_fail
+        mock_comm.return_value = instance
+
+        with pytest.raises(RuntimeError):
+            await provider._synthesize_chunk("Ngắn", "vi-VN-HoaiMyNeural", "+0%", "+0Hz", "+0%", 1, 1, max_retries=1)
+
 
 @pytest.mark.integration
 @pytest.mark.asyncio
