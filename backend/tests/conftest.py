@@ -22,7 +22,7 @@ if os.environ.get("DATABASE_URL") in ("sqlite+aiosqlite:///:memory:", "sqlite://
 from pathlib import Path
 
 import app.routes.tts as tts_route
-from app.db import AsyncSessionLocal, create_tables
+from app.db import AsyncSessionLocal, create_tables, engine
 from app.dependencies import get_tts_service
 from app.main import app
 from app.models.user import User
@@ -37,6 +37,7 @@ def setup_test_database():
     """Đảm bảo bảng và các cột SQLite được khởi tạo và migrate đầy đủ trước khi chạy test."""
     loop = asyncio.new_event_loop()
     loop.run_until_complete(create_tables())
+    loop.run_until_complete(engine.dispose())
     loop.close()
     yield
     # Dọn dẹp test db nếu dùng test_ci.sqlite

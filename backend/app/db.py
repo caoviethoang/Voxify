@@ -1,6 +1,7 @@
 """Kết nối cơ sở dữ liệu với SQLAlchemy async."""
 from typing import AsyncGenerator
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -11,7 +12,7 @@ settings = get_settings()
 is_sqlite = "sqlite" in settings.database_url
 is_memory = ":memory:" in settings.database_url
 
-connect_args = {"check_same_thread": False, "timeout": 30.0} if is_sqlite else {}
+connect_args = {"check_same_thread": False, "timeout": 60.0} if is_sqlite else {}
 pool_kwargs = {}
 if is_memory:
     from sqlalchemy.pool import StaticPool
@@ -24,6 +25,16 @@ engine = create_async_engine(
     connect_args=connect_args,
     **pool_kwargs,
 )
+
+if is_sqlite:
+    @event.listens_for(engine.sync_engine, "connect")
+    def _set_sqlite_pragmas(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        if not is_memory:
+            cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=60000")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
