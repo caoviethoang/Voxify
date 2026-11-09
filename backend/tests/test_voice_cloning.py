@@ -547,17 +547,42 @@ async def test_voice_clone_service_edge_cases_and_quotas(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_external_clone_providers_http(respx_mock, tmp_path):
-    """Kiểm tra gọi HTTP API tới ElevenLabs và XTTS thông qua respx mock."""
+async def test_external_clone_providers_http(monkeypatch, tmp_path):
+    """Kiểm tra gọi HTTP API tới ElevenLabs và XTTS thông qua AsyncClient mock."""
     sample = tmp_path / "voice.mp3"
     sample.write_bytes(create_dummy_audio_bytes(10.0))
 
+    class DummyResponse:
+        def __init__(self, status_code: int, json_data: dict = None, content: bytes = b""):
+            self.status_code = status_code
+            self._json = json_data or {}
+            self.content = content
+            self.text = str(json_data or "")
+
+        def json(self):
+            return self._json
+
+    async def mock_post(client, url, *args, **kwargs):
+        u = str(url)
+        if "voices/add" in u:
+            return DummyResponse(200, json_data={"voice_id": "el_voice_999"})
+        elif "text-to-speech" in u:
+            return DummyResponse(200, content=b"AUDIO_EL")
+        elif "/api/clone" in u:
+            return DummyResponse(200, json_data={"speaker_id": "xtts_speaker_1"})
+        elif "/api/tts" in u:
+            return DummyResponse(200, content=b"AUDIO_XTTS")
+        return DummyResponse(404)
+
+    async def mock_delete(client, url, *args, **kwargs):
+        return DummyResponse(200)
+
+    import httpx
+    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
+    monkeypatch.setattr(httpx.AsyncClient, "delete", mock_delete)
+
     # 1. ElevenLabs API mock
     el = ElevenLabsCloneProvider(api_key="sk-test-key-123")
-    respx_mock.post("https://api.elevenlabs.io/v1/voices/add").respond(200, json={"voice_id": "el_voice_999"})
-    respx_mock.delete("https://api.elevenlabs.io/v1/voices/el_voice_999").respond(200, json={"status": "ok"})
-    respx_mock.post("https://api.elevenlabs.io/v1/text-to-speech/el_voice_999").respond(200, content=b"AUDIO_EL")
-
     cloned = await el.clone_voice("Giọng EL Mock", str(sample))
     assert cloned["provider_voice_id"] == "el_voice_999"
 
@@ -569,10 +594,6 @@ async def test_external_clone_providers_http(respx_mock, tmp_path):
 
     # 2. XTTS API mock
     xtts = XTTSCloneProvider(api_url="http://xtts.local:8000")
-    respx_mock.post("http://xtts.local:8000/api/clone").respond(200, json={"speaker_id": "xtts_speaker_1"})
-    respx_mock.delete("http://xtts.local:8000/api/speakers/xtts_speaker_1").respond(200)
-    respx_mock.post("http://xtts.local:8000/api/tts").respond(200, content=b"AUDIO_XTTS")
-
     cloned_x = await xtts.clone_voice("Giọng XTTS Mock", str(sample))
     assert cloned_x["provider_voice_id"] == "xtts_speaker_1"
 

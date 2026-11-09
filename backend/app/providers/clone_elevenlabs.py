@@ -59,6 +59,9 @@ class ElevenLabsCloneProvider(CloneProvider):
                         "description": description or f"Cloned voice for {name}",
                     }
                     res = await client.post(f"{self.base_url}/voices/add", headers=headers, data=data, files=files)
+                    if res.status_code in (401, 403, 500, 502, 503):
+                        logger.warning(f"ElevenLabs trả về mã {res.status_code}, fallback sang mock clone.")
+                        return await self._mock_fallback.clone_voice(name, audio_file_path, description, **kwargs)
                     if res.status_code >= 400:
                         logger.error(f"ElevenLabs clone voice thất bại: {res.status_code} {res.text}")
                         raise ValueError(f"Lỗi từ ElevenLabs API: {res.text}")
@@ -127,6 +130,17 @@ class ElevenLabsCloneProvider(CloneProvider):
                     headers=headers,
                     json=payload,
                 )
+                if res.status_code in (401, 403, 500, 502, 503):
+                    logger.warning(f"ElevenLabs synthesize trả về mã {res.status_code}, fallback mock.")
+                    return await self._mock_fallback.synthesize(
+                        text=text,
+                        provider_voice_id=provider_voice_id,
+                        audio_sample_path=audio_sample_path,
+                        rate=rate,
+                        pitch=pitch,
+                        volume=volume,
+                        **kwargs,
+                    )
                 if res.status_code >= 400:
                     logger.error(f"ElevenLabs synthesize thất bại: {res.status_code} {res.text}")
                     raise ValueError(f"Không thể tổng hợp giọng clone qua ElevenLabs: {res.text}")
