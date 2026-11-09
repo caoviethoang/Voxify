@@ -1285,5 +1285,75 @@ async def test_payment_routes_extra_branches():
             assert payos_unknown.json()["success"] is False
 
 
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_additional_service_units():
+    """Bổ sung unit tests cho core handlers, dictionary service, script parser và audio service."""
+    # 1. app_error_handler & custom error classes
+    from app.core.errors import AppError, TTSError, ValidationError, app_error_handler
+    from app.services.dictionary_service import DictionaryService
+    from app.services.tts_script_parser import TTSScriptParser
+    ve = ValidationError("Validation test")
+    assert ve.status_code == 400
+    te = TTSError("TTS test")
+    assert te.status_code == 502
+
+    dummy_req = MagicMock()
+    err_resp = await app_error_handler(dummy_req, AppError(code="TEST_CODE", message="Test error", status_code=418))
+    assert err_resp.status_code == 418
+
+    # Anti-abuse check
+    from app.core.voice_anti_abuse import check_voice_name_against_blocklist
+    is_blocked, target, msg = check_voice_name_against_blocklist("Sơn Tùng M-TP Clone", "Mô tả")
+    assert is_blocked is True
+    assert target is not None
+
+    # 2. DictionaryService non-existent delete and edge cases
+    async with AsyncSessionLocal() as db:
+        del_res = await DictionaryService.delete_rule(db, user_id=999999, rule_id=999999)
+        assert del_res is False
+
+        # apply_dictionary với user_id=None hoặc text=""
+        res_none_usr = await DictionaryService.apply_dictionary(db, None, "Test text")
+        assert res_none_usr == "Test text"
+        res_empty_txt = await DictionaryService.apply_dictionary(db, 1, "")
+        assert res_empty_txt == ""
+
+    # 3. AudioService duration đo file không tồn tại
+    dur = AudioService.measure_duration("/non/existent/path/audio.mp3")
+    assert dur == 0.0
+
+    # 4. TTSScriptParser edge cases (line 19 & line 91)
+    empty_lines = TTSScriptParser.parse_script("   \n\n  ", default_voice="vi-VN-HoaiMyNeural")
+    assert empty_lines == []
+
+    parsed_alias = TTSScriptParser._map_voice_alias("custom-neural-voice", default_voice="vi-VN-HoaiMyNeural")
+    assert parsed_alias == "custom-neural-voice"
+
+    # 5. StorageService get_url (line 33) & PDF receipt non-ascii char (line 46)
+    from datetime import UTC, datetime
+
+    from app.core.receipt import generate_receipt_pdf
+    from app.services.storage_service import StorageService
+
+    storage = StorageService()
+    url = await storage.get_url("storage/audio/test.mp3")
+    assert "/storage/audio/test.mp3" in url or "test.mp3" in url
+
+    pdf_bytes = generate_receipt_pdf(
+        order_code="VOX_SPECIAL_€™",
+        user_email="test_special_€@example.com",
+        plan_name="Gói Đặc Biệt ™",
+        original_amount=50000,
+        discount_amount=0,
+        final_amount=50000,
+        credits=1000,
+        payment_method="vietqr",
+        paid_at=datetime.now(UTC),
+    )
+    assert len(pdf_bytes) > 0
+
+
+
 
 

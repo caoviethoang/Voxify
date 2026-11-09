@@ -53,6 +53,7 @@ class TTSJobService:
         volume: str = "+0%",
         output_format: str = "mp3",
         apply_dict: bool = True,
+        webhook_url: Optional[str] = None,
     ) -> Generation:
         """
         Tạo job TTS mới trong hàng đợi, trừ trước credit (reserve) và kích hoạt worker ngầm.
@@ -123,6 +124,7 @@ class TTSJobService:
             credit_used=cost,
             is_preview=False,
             provider="edge",
+            webhook_url=webhook_url,
         )
         db.add(generation)
         await db.commit()
@@ -299,6 +301,18 @@ class TTSJobService:
                     f"Job TTS #{job_id} hoàn tất thành công! ({final_duration:.1f}s, {final_size} bytes, định dạng {target_ext})"
                 )
 
+                # Gửi thông báo webhook nếu có đăng ký
+                if job.webhook_url:
+                    webhook_data = {
+                        "event": "tts.job.completed",
+                        "job_id": job.id,
+                        "status": "completed",
+                        "audio_url": f"/api/tts/jobs/{job.id}/audio",
+                        "duration": job.duration,
+                        "credits_used": job.credit_used,
+                    }
+                    asyncio.create_task(self._dispatch_webhook(job.webhook_url, webhook_data))
+
             except Exception as exc:
                 logger.error(f"Job TTS #{job_id} thất bại: {exc}", exc_info=True)
                 # TỰ ĐỘNG HOÀN TRẢ CREDIT KHI JOB LỖI
@@ -319,6 +333,26 @@ class TTSJobService:
                 job.progress = 0
                 job.error_message = f"Lỗi xử lý: {str(exc)}"
                 await db.commit()
+
+                if job.webhook_url:
+                    webhook_fail_data = {
+                        "event": "tts.job.failed",
+                        "job_id": job.id,
+                        "status": "failed",
+                        "credits_used": 0,
+                        "error_message": job.error_message,
+                    }
+                    asyncio.create_task(self._dispatch_webhook(job.webhook_url, webhook_fail_data))
+
+    @staticmethod
+    async def _dispatch_webhook(webhook_url: str, payload: Dict[str, Any]) -> None:
+        """Gửi webhook callback bất đồng bộ tới URL được đăng ký."""
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                await client.post(webhook_url, json=payload)
+        except Exception as e:
+            logger.warning(f"Không thể gửi webhook callback tới {webhook_url}: {e}")
 
     @staticmethod
     def _split_macro_chunks(text: str, max_chars: int = _MACRO_CHUNK_SIZE) -> List[str]:
