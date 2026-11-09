@@ -197,6 +197,8 @@ class VoiceCloneService:
                 name=clean_name,
                 audio_file_path=sample_file_path,
                 description=description,
+                gender=gender,
+                language=language,
             )
             provider_voice_id = clone_res.get("provider_voice_id")
         except Exception as e:
@@ -224,6 +226,8 @@ class VoiceCloneService:
                 text=preview_text,
                 provider_voice_id=provider_voice_id or voice_id,
                 audio_sample_path=sample_file_path,
+                gender=gender,
+                language=language,
             )
             with open(target_preview_path, "wb") as f_prev:
                 f_prev.write(preview_bytes)
@@ -457,4 +461,6 @@ class VoiceCloneService:
             rate=rate,
             pitch=pitch,
             volume=volume,
+            gender=voice.gender,
+            language=voice.language,
         )
