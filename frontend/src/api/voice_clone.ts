@@ -42,17 +42,17 @@ export interface VoiceAbuseReportRequest {
 }
 
 export async function listClonedVoices(): Promise<ClonedVoiceListResponse> {
-  const res = await apiClient.get<ClonedVoiceListResponse>('/api/voices/cloned')
+  const res = await apiClient.get<ClonedVoiceListResponse>('/voices/cloned')
   return res.data
 }
 
 export async function getVoiceCloneLimits(): Promise<VoiceCloneQuota> {
-  const res = await apiClient.get<VoiceCloneQuota>('/api/voices/clone/limits')
+  const res = await apiClient.get<VoiceCloneQuota>('/voices/clone/limits')
   return res.data
 }
 
 export async function createVoiceClone(formData: FormData): Promise<ClonedVoice> {
-  const res = await apiClient.post<ClonedVoice>('/api/voices/clone', formData, {
+  const res = await apiClient.post<ClonedVoice>('/voices/clone', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
@@ -64,7 +64,7 @@ export async function updateClonedVoice(
   voiceId: string,
   data: { name?: string; description?: string }
 ): Promise<ClonedVoice> {
-  const res = await apiClient.patch<ClonedVoice>(`/api/voices/cloned/${voiceId}`, data)
+  const res = await apiClient.patch<ClonedVoice>(`/voices/cloned/${voiceId}`, data)
   return res.data
 }
 
@@ -72,7 +72,7 @@ export async function deleteClonedVoice(
   voiceId: string
 ): Promise<{ success: boolean; message: string }> {
   const res = await apiClient.delete<{ success: boolean; message: string }>(
-    `/api/voices/cloned/${voiceId}`
+    `/voices/cloned/${voiceId}`
   )
   return res.data
 }
@@ -82,7 +82,7 @@ export async function reportVoiceAbuse(
   data: VoiceAbuseReportRequest
 ): Promise<{ id: number; status: string }> {
   const res = await apiClient.post<{ id: number; status: string }>(
-    `/api/voices/cloned/${voiceId}/report`,
+    `/voices/cloned/${voiceId}/report`,
     data
   )
   return res.data
