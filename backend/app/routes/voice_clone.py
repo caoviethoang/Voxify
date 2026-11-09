@@ -211,7 +211,7 @@ async def stream_preview_audio(
             prev_bytes = await _clone_service.synthesize_cloned_voice(
                 db=db,
                 voice_id=voice.voice_id,
-                user=voice.user,
+                user=None,
                 text=prev_text,
             )
             previews_dir = Path("storage/clones/previews")
@@ -220,7 +220,13 @@ async def stream_preview_audio(
             with open(target_path, "wb") as f_prev:
                 f_prev.write(prev_bytes)
             voice.preview_audio_path = target_path
+            voice.preview_audio_url = f"/api/voices/cloned/{voice.voice_id}/preview"
             await db.commit()
+            return FileResponse(
+                target_path,
+                media_type="audio/mpeg",
+                filename=f"{voice.name}_preview.mp3",
+            )
         except Exception as e:
             logger.warning(f"Không thể tái tạo preview cho {voice_id}: {e}")
             if voice.audio_sample_path and os.path.exists(voice.audio_sample_path):

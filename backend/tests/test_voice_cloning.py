@@ -1,4 +1,5 @@
 """Unit & Integration tests cho tính năng Clone giọng nói (Issue #12 / Prompt 10)."""
+import asyncio
 import io
 import os
 from datetime import UTC, datetime
@@ -302,6 +303,13 @@ async def test_voice_cloning_full_lifecycle_api(monkeypatch):
         assert job_res.status_code == 202
         job_id = job_res.json()["id"]
         assert job_id > 0
+
+        # Chờ background job hoàn tất để giải phóng giao dịch và tránh xung đột khoá SQLite
+        for _ in range(30):
+            await asyncio.sleep(0.1)
+            p_res = await client.get(f"/api/tts/jobs/{job_id}", headers=headers)
+            if p_res.status_code == 200 and p_res.json()["status"] in ("done", "failed"):
+                break
 
         # 9. Báo cáo lạm dụng
         report_res = await client.post(

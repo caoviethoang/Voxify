@@ -10,9 +10,9 @@ from app.providers.base import TTSProvider
 logger = logging.getLogger(__name__)
 
 # Ngưỡng ký tự tối đa cho mỗi lần gọi edge-tts.
-# Chia theo dấu câu/mệnh đề tự nhiên (~800 ký tự) để vừa tránh bị từ chối do quá dài,
-# vừa tránh tách vụn quá nhiều chunk gây nghẽn kết nối và dính rate limit WebSocket của Microsoft.
-_MICRO_CHUNK_MAX = 800
+# Đặt ngưỡng 250 ký tự để Microsoft Edge TTS xử lý ổn định 100% tiếng Việt có dấu,
+# tránh timeout/NoAudioReceived do WebSocket quá tải hoặc ngắt kết nối.
+_MICRO_CHUNK_MAX = 250
 
 
 class EdgeTTSProvider(TTSProvider):
@@ -101,7 +101,7 @@ class EdgeTTSProvider(TTSProvider):
             all_audio.append(chunk_audio)
             # Delay an toàn giữa các request tránh rate-limit / connection drops của Microsoft Bing
             if i < len(chunks) - 1:
-                await asyncio.sleep(0.25)
+                await asyncio.sleep(0.35)
 
         return b"".join(all_audio)
 
@@ -116,7 +116,7 @@ class EdgeTTSProvider(TTSProvider):
         total: int,
         max_retries: int = 3,
     ) -> bytes:
-        """Tổng hợp giọng nói cho một đoạn văn bản nhỏ, có retry và fallback dự phòng."""
+        """Tổng hợp giọng nói cho một đoạn văn bản nhỏ, có retry, voice fallback và adaptive sub-chunking."""
         last_exception: Exception | None = None
         target_voice = voice
 
@@ -135,9 +135,11 @@ class EdgeTTSProvider(TTSProvider):
                 # Nếu gặp lỗi ở lần thử đầu, chuẩn hóa dấu câu và thử giọng fallback tương thích
                 if attempt >= 2:
                     current_chunk = re.sub(r'[!¡]+', '.', current_chunk)
-                    # HoaiMy hay gặp lỗi NoAudioReceived trên một số cụm từ, tự động fallback sang NamMinh ổn định hơn
+                    # Fallback 2 chiều giữa 2 giọng tiếng Việt phổ biến để đảm bảo luôn tạo được audio
                     if target_voice == "vi-VN-HoaiMyNeural":
                         target_voice = "vi-VN-NamMinhNeural"
+                    elif target_voice == "vi-VN-NamMinhNeural":
+                        target_voice = "vi-VN-HoaiMyNeural"
 
                 communicate = edge_tts.Communicate(
                     text=current_chunk,
@@ -166,7 +168,34 @@ class EdgeTTSProvider(TTSProvider):
                     f"Chunk {chunk_index}/{total} (voice: {target_voice}) – thử {attempt}/{max_retries} thất bại: {e}"
                 )
                 if attempt < max_retries:
-                    await asyncio.sleep(1.0 * attempt)  # back-off tuyến tính tăng thời gian chờ
+                    await asyncio.sleep(0.75 * attempt)
+
+        # Cơ chế dự phòng thông minh: nếu đoạn văn bản vẫn bị lỗi và có độ dài > 80 ký tự,
+        # tự động chia đôi (sub-split) thành 2 mảnh nhỏ hơn để tổng hợp riêng biệt
+        if len(cleaned_chunk) > 80:
+            logger.info(
+                f"Chunk {chunk_index}/{total} ({len(cleaned_chunk)} ký tự) thất bại sau {max_retries} lần thử, "
+                f"tự động kích hoạt cơ chế chia nhỏ (sub-splitting)."
+            )
+            half_len = max(40, len(cleaned_chunk) // 2 + 10)
+            sub_chunks = _split_into_micro_chunks(cleaned_chunk, max_len=half_len)
+            if len(sub_chunks) > 1:
+                sub_audios: List[bytes] = []
+                for s_idx, sc in enumerate(sub_chunks):
+                    sub_audio = await self._synthesize_chunk(
+                        chunk=sc,
+                        voice=voice,
+                        rate=rate,
+                        pitch=pitch,
+                        volume=volume,
+                        chunk_index=s_idx + 1,
+                        total=len(sub_chunks),
+                        max_retries=2,
+                    )
+                    sub_audios.append(sub_audio)
+                    if s_idx < len(sub_chunks) - 1:
+                        await asyncio.sleep(0.25)
+                return b"".join(sub_audios)
 
         raise RuntimeError(
             f"Lỗi kết nối khi tạo giọng nói (chunk {chunk_index}/{total}). "
