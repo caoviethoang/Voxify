@@ -1,3 +1,4 @@
+from app.models.cloned_voice import ClonedVoice, VoiceAbuseReport, VoiceConsentLog
 from app.models.credit import CreditTransaction
 from app.models.dictionary import PronunciationDictionary
 from app.models.generation import Generation
@@ -15,4 +16,7 @@ __all__ = [
     "Coupon",
     "Order",
     "PaymentWebhookLog",
+    "ClonedVoice",
+    "VoiceConsentLog",
+    "VoiceAbuseReport",
 ]

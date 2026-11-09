@@ -10,9 +10,9 @@ from app.providers.base import TTSProvider
 logger = logging.getLogger(__name__)
 
 # Ngưỡng ký tự tối đa cho mỗi lần gọi edge-tts.
-# Microsoft silently closes WebSocket cho văn bản dài / nhiều dấu Unicode tiếng Việt (đặc biệt giọng HoaiMy).
-# Giữ nhỏ (~80 ký tự) để chia theo dấu phẩy/mệnh đề tự nhiên và tránh bị Microsoft từ chối NoAudioReceived.
-_MICRO_CHUNK_MAX = 80
+# Chia theo dấu câu/mệnh đề tự nhiên (~800 ký tự) để vừa tránh bị từ chối do quá dài,
+# vừa tránh tách vụn quá nhiều chunk gây nghẽn kết nối và dính rate limit WebSocket của Microsoft.
+_MICRO_CHUNK_MAX = 800
 
 
 class EdgeTTSProvider(TTSProvider):
@@ -120,16 +120,24 @@ class EdgeTTSProvider(TTSProvider):
         last_exception: Exception | None = None
         target_voice = voice
 
+        # Chuẩn hóa các dấu ngoặc kép / đơn đặc thù có thể gây lỗi parser trên server
+        cleaned_chunk = (
+            chunk.replace('“', '"')
+            .replace('”', '"')
+            .replace('‘', "'")
+            .replace('’', "'")
+            .replace('…', '...')
+        )
+
         for attempt in range(1, max_retries + 1):
             try:
-                current_chunk = chunk
+                current_chunk = cleaned_chunk
                 # Nếu gặp lỗi ở lần thử đầu, chuẩn hóa dấu câu và thử giọng fallback tương thích
                 if attempt >= 2:
                     current_chunk = re.sub(r'[!¡]+', '.', current_chunk)
-                    if voice == "vi-VN-HoaiMyNeural":
+                    # HoaiMy hay gặp lỗi NoAudioReceived trên một số cụm từ, tự động fallback sang NamMinh ổn định hơn
+                    if target_voice == "vi-VN-HoaiMyNeural":
                         target_voice = "vi-VN-NamMinhNeural"
-                    elif voice == "vi-VN-NamMinhNeural":
-                        target_voice = "vi-VN-HoaiMyNeural"
 
                 communicate = edge_tts.Communicate(
                     text=current_chunk,
@@ -158,7 +166,7 @@ class EdgeTTSProvider(TTSProvider):
                     f"Chunk {chunk_index}/{total} (voice: {target_voice}) – thử {attempt}/{max_retries} thất bại: {e}"
                 )
                 if attempt < max_retries:
-                    await asyncio.sleep(0.5 * attempt)  # back-off tuyến tính
+                    await asyncio.sleep(1.0 * attempt)  # back-off tuyến tính tăng thời gian chờ
 
         raise RuntimeError(
             f"Lỗi kết nối khi tạo giọng nói (chunk {chunk_index}/{total}). "

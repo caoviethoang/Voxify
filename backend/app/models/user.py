@@ -53,3 +53,6 @@ class User(Base):
     orders: Mapped[list["Order"]] = relationship(
         "Order", back_populates="user", cascade="all, delete-orphan", lazy="select"
     )
+    cloned_voices: Mapped[list["ClonedVoice"]] = relationship(
+        "ClonedVoice", back_populates="user", cascade="all, delete-orphan", lazy="select"
+    )

@@ -132,7 +132,7 @@ class TTSService:
             voice_ids = {v["id"] for v in voices}
             if voice_id not in voice_ids:
                 logger.warning(f"Giọng đọc '{voice_id}' không có trong danh sách khả dụng.")
-                if not voice_id.startswith(("vi-", "en-", "zh-", "ja-", "ko-", "fr-", "de-")):
+                if not voice_id.startswith(("vi-", "en-", "zh-", "ja-", "ko-", "fr-", "de-", "clone_")):
                     raise ValueError(f"Giọng đọc '{voice_id}' không tồn tại hoặc không hợp lệ.")
         except Exception as e:
             if isinstance(e, ValueError):

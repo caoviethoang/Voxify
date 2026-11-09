@@ -262,14 +262,27 @@ async def synthesize_speech(
             )
 
     try:
-        audio_bytes = await tts_service.synthesize(
-            text=clean_text,
-            voice=request.voice.strip(),
-            rate=request.rate or "+0%",
-            pitch=request.pitch or "+0Hz",
-            volume=request.volume or "+0%",
-            preview=is_preview,
-        )
+        if request.voice.strip().startswith("clone_"):
+            from app.services.voice_clone_service import VoiceCloneService
+            clone_svc = VoiceCloneService()
+            audio_bytes = await clone_svc.synthesize_cloned_voice(
+                db=db,
+                voice_id=request.voice.strip(),
+                user=current_user,
+                text=clean_text,
+                rate=request.rate or "+0%",
+                pitch=request.pitch or "+0Hz",
+                volume=request.volume or "+0%",
+            )
+        else:
+            audio_bytes = await tts_service.synthesize(
+                text=clean_text,
+                voice=request.voice.strip(),
+                rate=request.rate or "+0%",
+                pitch=request.pitch or "+0Hz",
+                volume=request.volume or "+0%",
+                preview=is_preview,
+            )
 
         file_path, file_size = await _storage_service.save_audio(
             data=audio_bytes,
@@ -335,6 +348,8 @@ async def synthesize_speech(
 
         if isinstance(exc, HTTPException):
             raise exc
+        if isinstance(exc, AppError):
+            raise HTTPException(status_code=exc.status_code, detail=exc.message)
         if isinstance(exc, ValueError):
             raise HTTPException(status_code=400, detail=str(exc))
         if isinstance(exc, RuntimeError):
