@@ -64,6 +64,17 @@ class ElevenLabsCloneProvider(CloneProvider):
                         return await self._mock_fallback.clone_voice(name, audio_file_path, description, **kwargs)
                     if res.status_code >= 400:
                         logger.error(f"ElevenLabs clone voice thất bại: {res.status_code} {res.text}")
+                        try:
+                            err_detail = res.json().get("detail", {})
+                            if isinstance(err_detail, dict) and err_detail.get("code") == "paid_plan_required":
+                                raise ValueError(
+                                    "Tài khoản ElevenLabs của bạn hiện là gói Miễn phí (chưa hỗ trợ tính năng Instant Voice Cloning). "
+                                    "ElevenLabs yêu cầu gói trả phí (gói Starter $5/tháng, tháng đầu khuyến mãi $1) để mở khóa quyền clone giọng từ file tải lên."
+                                )
+                        except ValueError:
+                            raise
+                        except Exception:
+                            pass
                         raise ValueError(f"Lỗi từ ElevenLabs API: {res.text}")
 
                     res_data = res.json()
