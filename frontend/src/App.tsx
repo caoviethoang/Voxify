@@ -11,6 +11,7 @@ import CreditHistory from './pages/CreditHistory'
 import History from './pages/History'
 import Pricing from './pages/Pricing'
 import PlaceholderPage from './pages/PlaceholderPage'
+import Developers from './pages/Developers'
 import Profile from './pages/Profile'
 import NotFound from './pages/NotFound'
 import Login from './pages/Login'
@@ -71,15 +72,7 @@ export default function App() {
                   />
                 }
               />
-              <Route
-                path="/developers"
-                element={
-                  <PlaceholderPage
-                    title="API & Developers"
-                    subtitle="Tích hợp API giọng đọc AI tiếng Việt chất lượng cao vào website và ứng dụng của bạn."
-                  />
-                }
-              />
+              <Route path="/developers" element={<Developers />} />
 
               {/* Trang 404 */}
               <Route path="*" element={<NotFound />} />

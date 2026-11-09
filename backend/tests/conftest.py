@@ -16,6 +16,10 @@ from httpx import ASGITransport, AsyncClient
 # Thiết lập biến môi trường test trước khi import app
 os.environ["TTS_PROVIDER"] = "fake"
 os.environ["DEBUG"] = "true"
+if os.environ.get("DATABASE_URL") in ("sqlite+aiosqlite:///:memory:", "sqlite:///:memory:"):
+    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test_ci.sqlite"
+
+from pathlib import Path
 
 import app.routes.tts as tts_route
 from app.db import AsyncSessionLocal, create_tables
@@ -34,6 +38,14 @@ def setup_test_database():
     loop = asyncio.new_event_loop()
     loop.run_until_complete(create_tables())
     loop.close()
+    yield
+    # Dọn dẹp test db nếu dùng test_ci.sqlite
+    for test_file in [Path("./test_ci.sqlite"), Path("./test_ci.sqlite-wal"), Path("./test_ci.sqlite-shm")]:
+        if test_file.exists():
+            try:
+                test_file.unlink()
+            except Exception:
+                pass
 
 
 @pytest.fixture(autouse=True)

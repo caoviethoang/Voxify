@@ -47,6 +47,9 @@ class Generation(Base):
     # Tiêu đề tùy chỉnh do người dùng đặt (tối đa 200 ký tự)
     title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
+    # Webhook callback URL khi hoàn thành job async (Issue #13)
+    webhook_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

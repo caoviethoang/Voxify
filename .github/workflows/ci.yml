@@ -47,7 +47,7 @@ jobs:
         working-directory: backend
     env:
       ENVIRONMENT: "testing"
-      DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+      DATABASE_URL: "sqlite+aiosqlite:///./test_ci.sqlite"
       SECRET_KEY: "test-secret-key-12345678901234567890"
       ALGORITHM: "HS256"
       ACCESS_TOKEN_EXPIRE_MINUTES: "30"

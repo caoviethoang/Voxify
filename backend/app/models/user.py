@@ -16,6 +16,7 @@ class User(Base):
     hashed_password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     full_name: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
     role: Mapped[str] = mapped_column(String(20), default="user", nullable=False)  # "user" | "admin"
+    subscription_tier: Mapped[str] = mapped_column(String(50), default="free", nullable=False)  # "free" | "pro" | "vip"
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -55,4 +56,7 @@ class User(Base):
     )
     cloned_voices: Mapped[list["ClonedVoice"]] = relationship(
         "ClonedVoice", back_populates="user", cascade="all, delete-orphan", lazy="select"
+    )
+    api_keys: Mapped[list["ApiKey"]] = relationship(
+        "ApiKey", back_populates="user", cascade="all, delete-orphan", lazy="select"
     )

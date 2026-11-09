@@ -19,10 +19,12 @@ from app.routes import (
     config_router,
     credit_router,
     dashboard_router,
+    developers_router,
     dictionary_router,
     history_router,
     payment_router,
     tts_router,
+    v1_router,
     voice_clone_router,
     voices_router,
 )
@@ -115,6 +117,8 @@ app.include_router(tts_router)
 app.include_router(history_router)
 app.include_router(payment_router)
 app.include_router(dashboard_router)
+app.include_router(developers_router)
+app.include_router(v1_router)
 
 
 @app.get("/api/me", response_model=UserOut, summary="Lấy thông tin người dùng hiện tại (alias)")

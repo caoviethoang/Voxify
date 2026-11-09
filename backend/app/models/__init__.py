@@ -1,3 +1,4 @@
+from app.models.api_key import ApiKey, ApiUsageLog
 from app.models.cloned_voice import ClonedVoice, VoiceAbuseReport, VoiceConsentLog
 from app.models.credit import CreditTransaction
 from app.models.dictionary import PronunciationDictionary
@@ -19,4 +20,6 @@ __all__ = [
     "ClonedVoice",
     "VoiceConsentLog",
     "VoiceAbuseReport",
+    "ApiKey",
+    "ApiUsageLog",
 ]
