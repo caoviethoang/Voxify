@@ -26,7 +26,7 @@ class CloneProvider(ABC):
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """
-        Tạo profile clone từ tệp âm thanh mẫu (5–30s).
+        Tạo profile clone từ tệp âm thanh mẫu (5s – 3 phút).
 
         Trả về dict:
         - provider_voice_id: str

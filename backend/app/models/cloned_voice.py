@@ -20,7 +20,7 @@ class ClonedVoice(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # File mẫu âm thanh gốc (5–30 giây)
+    # File mẫu âm thanh gốc (5 giây – 3 phút)
     audio_sample_path: Mapped[str] = mapped_column(String(500), nullable=False)
     sample_duration: Mapped[float] = mapped_column(Float, nullable=False)
     sample_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)

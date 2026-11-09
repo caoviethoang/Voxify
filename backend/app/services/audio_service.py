@@ -49,11 +49,11 @@ class AudioService:
         cls,
         file_path: str,
         min_duration: float = 5.0,
-        max_duration: float = 30.0,
+        max_duration: float = 180.0,
     ) -> Dict[str, Any]:
         """
         Kiểm tra chất lượng mẫu âm thanh cho Clone giọng nói (Prompt 10 / Issue #12):
-        - Độ dài mẫu: 5.0s – 30.0s
+        - Độ dài mẫu: 5.0s – 180.0s (tối đa 3 phút)
         - Mức độ âm lượng và độ ồn (volumedetect qua ffmpeg)
         - Điểm chất lượng mẫu (1.0 – 5.0 sao)
         """
@@ -75,11 +75,12 @@ class AudioService:
                 "error": f"Mẫu âm thanh quá ngắn ({duration:.1f}s). Yêu cầu tối thiểu {min_duration:.0f} giây để mô hình học âm sắc.",
             }
         if duration > max_duration:
+            max_mins = int(max_duration // 60)
             return {
                 "valid": False,
                 "duration": round(duration, 2),
                 "quality_score": 1.0,
-                "error": f"Mẫu âm thanh quá dài ({duration:.1f}s). Yêu cầu tối đa {max_duration:.0f} giây.",
+                "error": f"Mẫu âm thanh quá dài ({duration:.1f}s). Yêu cầu tối đa {max_mins} phút ({max_duration:.0f} giây).",
             }
 
         # 2. Phân tích mức âm lượng / độ nhiễu bằng ffmpeg volumedetect

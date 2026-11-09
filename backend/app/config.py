@@ -75,6 +75,8 @@ class Settings(BaseSettings):
     clone_creation_fee: int = 500  # Phí tạo 1 voice clone (credits)
     clone_voice_multiplier: float = 1.5  # Hệ số nhân credit khi đọc bằng giọng clone
     clone_storage_path: str = "./storage/clones"
+    clone_sample_min_duration: float = 5.0  # Thời lượng mẫu âm thanh tối thiểu (giây)
+    clone_sample_max_duration: float = 180.0  # Thời lượng mẫu âm thanh tối đa (3 phút = 180 giây)
     max_cloned_voices_free: int = 1
     max_cloned_voices_pro: int = 5
     max_cloned_voices_vip: int = 20

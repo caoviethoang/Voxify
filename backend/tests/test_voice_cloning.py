@@ -79,7 +79,7 @@ async def test_anti_abuse_celebrity_and_politician_blocklist():
 
 @pytest.mark.asyncio
 async def test_audio_service_sample_validation(tmp_path, monkeypatch):
-    """Kiểm tra thẩm định chất lượng mẫu âm thanh (5–30s, độ ồn, độ dài)."""
+    """Kiểm tra thẩm định chất lượng mẫu âm thanh (5s – 3 phút, độ ồn, độ dài)."""
     # 1. File trống
     empty_file = tmp_path / "empty.mp3"
     empty_file.write_bytes(b"")
@@ -94,21 +94,21 @@ async def test_audio_service_sample_validation(tmp_path, monkeypatch):
     assert val_short["valid"] is False
     assert "quá ngắn" in val_short["error"]
 
-    # 3. File quá dài (> 30s)
+    # 3. File quá dài (> 180s / 3 phút)
     long_file = tmp_path / "long.mp3"
-    long_file.write_bytes(create_dummy_audio_bytes(35.0))
-    monkeypatch.setattr(AudioService, "measure_duration", lambda path: 35.0)
+    long_file.write_bytes(create_dummy_audio_bytes(190.0))
+    monkeypatch.setattr(AudioService, "measure_duration", lambda path: 190.0)
     val_long = await AudioService.validate_voice_sample(str(long_file))
     assert val_long["valid"] is False
     assert "quá dài" in val_long["error"]
 
-    # 4. File hợp lệ (15s)
+    # 4. File hợp lệ (49.7s - file thực tế của user)
     valid_file = tmp_path / "valid.mp3"
-    valid_file.write_bytes(create_dummy_audio_bytes(15.0))
-    monkeypatch.setattr(AudioService, "measure_duration", lambda path: 15.0)
+    valid_file.write_bytes(create_dummy_audio_bytes(49.7))
+    monkeypatch.setattr(AudioService, "measure_duration", lambda path: 49.7)
     val_valid = await AudioService.validate_voice_sample(str(valid_file))
     assert val_valid["valid"] is True
-    assert val_valid["duration"] == 15.0
+    assert val_valid["duration"] == 49.7
     assert val_valid["quality_score"] >= 3.5
 
 

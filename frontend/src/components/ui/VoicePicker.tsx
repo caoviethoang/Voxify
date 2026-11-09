@@ -475,7 +475,7 @@ export default function VoicePicker({
                         Gói {clonedQuota.plan_name}: Đã dùng {clonedQuota.used} / {clonedQuota.max_allowed} giọng clone cá nhân.
                       </>
                     ) : (
-                      'Tải lên hoặc ghi âm 5–30 giây giọng thật để clone giọng đọc AI độc quyền của bạn.'
+                      'Tải lên hoặc ghi âm mẫu giọng (5 giây – 3 phút) để clone giọng đọc AI độc quyền của bạn.'
                     )}
                   </p>
                 </div>
@@ -505,7 +505,7 @@ export default function VoicePicker({
                       Bạn chưa có giọng clone nào
                     </h3>
                     <p className="text-[11px] text-slate-500 dark:text-white/40 mt-1 max-w-sm">
-                      Bấm vào nút bên dưới để ghi âm hoặc tải lên mẫu âm thanh 5–30s tạo giọng AI của riêng bạn.
+                      Bấm vào nút bên dưới để ghi âm hoặc tải lên mẫu âm thanh (5s – 3 phút) tạo giọng AI của riêng bạn.
                     </p>
                   </div>
                   <button

@@ -79,7 +79,7 @@ async def create_voice_clone(
     consent_accepted: bool = Form(..., description="Cam kết bản quyền & chủ quyền giọng nói"),
     gender: str = Form("unspecified", description="Giới tính giọng: male | female | unspecified"),
     language: str = Form("vi-VN", description="Ngôn ngữ mẫu: vi-VN, en-US..."),
-    audio_file: UploadFile = File(..., description="Tệp âm thanh mẫu hoặc bản ghi âm 5–30 giây"),
+    audio_file: UploadFile = File(..., description="Tệp âm thanh mẫu hoặc bản ghi âm 5 giây – 3 phút"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -87,7 +87,7 @@ async def create_voice_clone(
     Tạo Voice Clone:
     - Bắt buộc kiểm tra cam kết bản quyền
     - Chặn tên người nổi tiếng / chính trị gia
-    - Kiểm tra độ dài 5–30s và chất lượng âm thanh (volumedetect)
+    - Kiểm tra độ dài (5s – 3 phút) và chất lượng âm thanh (volumedetect)
     - Trừ phí tạo 1 lần (500 credits)
     - Lưu audit log đồng ý (user_id, IP, User-Agent, thời gian)
     """

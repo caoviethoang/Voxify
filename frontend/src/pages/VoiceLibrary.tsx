@@ -442,7 +442,7 @@ export default function VoiceLibrary() {
                     giọng clone cá nhân.
                   </>
                 ) : (
-                  'Clone giọng đọc của bạn từ 5–30 giây mẫu âm thanh để sử dụng trong AI Studio.'
+                  'Clone giọng đọc của bạn từ mẫu âm thanh (5 giây – 3 phút) để sử dụng trong AI Studio.'
                 )}
               </p>
             </div>
@@ -471,7 +471,7 @@ export default function VoiceLibrary() {
                 Bạn chưa có giọng clone nào
               </h3>
               <p className="text-xs text-slate-500 dark:text-white/50 max-w-md">
-                Ghi âm trực tiếp hoặc tải lên tệp âm thanh 5–30s giọng thật của bạn để tạo phiên bản AI độc quyền dùng trong Studio.
+                Ghi âm trực tiếp hoặc tải lên tệp âm thanh (5s – 3 phút) giọng thật của bạn để tạo phiên bản AI độc quyền dùng trong Studio.
               </p>
               <button
                 onClick={() => setIsCloneModalOpen(true)}
@@ -508,7 +508,7 @@ export default function VoiceLibrary() {
                               </span>
                             </div>
                             <p className="text-[11px] text-slate-500 dark:text-white/40 mt-0.5">
-                              Mẫu: {voice.sample_duration ? `${voice.sample_duration.toFixed(1)}s` : '5-30s'} &middot;{' '}
+                              Mẫu: {voice.sample_duration ? `${voice.sample_duration.toFixed(1)}s` : '5s – 3 phút'} &middot;{' '}
                               <span className="text-amber-500 font-semibold">
                                 ★ {voice.quality_score ? voice.quality_score.toFixed(1) : '5.0'}
                               </span>

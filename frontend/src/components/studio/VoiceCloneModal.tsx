@@ -22,6 +22,12 @@ interface VoiceCloneModalProps {
   onVoiceCreated?: (voice: ClonedVoice) => void
 }
 
+const formatTimer = (seconds: number) => {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m < 10 ? `0${m}` : m}:${s < 10 ? `0${s}` : s}`
+}
+
 export default function VoiceCloneModal({ isOpen, onClose, onVoiceCreated }: VoiceCloneModalProps) {
   const { user, refreshUser } = useAuth()
   const toast = useToast()
@@ -111,12 +117,12 @@ export default function VoiceCloneModal({ isOpen, onClose, onVoiceCreated }: Voi
       recorder.start(100)
       setIsRecording(true)
 
-      // Bộ đếm thời gian từ 0s tới tối đa 30s
+      // Bộ đếm thời gian từ 0s tới tối đa 180s (3 phút)
       timerRef.current = window.setInterval(() => {
         setRecordingSeconds((prev) => {
-          if (prev >= 29) {
+          if (prev >= 179) {
             stopRecording()
-            return 30
+            return 180
           }
           return prev + 1
         })
@@ -196,13 +202,13 @@ export default function VoiceCloneModal({ isOpen, onClose, onVoiceCreated }: Voi
     let fileToUpload: File | null = null
     if (mode === 'record') {
       if (!audioBlob || recordingSeconds < 5) {
-        toast.error('Mẫu thu âm phải có thời lượng từ 5 đến 30 giây.')
+        toast.error('Mẫu thu âm phải có thời lượng từ 5 giây đến 3 phút.')
         return
       }
       fileToUpload = new File([audioBlob], `${name.trim()}_sample.webm`, { type: 'audio/webm' })
     } else {
       if (!uploadedFile) {
-        toast.error('Vui lòng chọn tệp âm thanh mẫu từ 5 đến 30 giây.')
+        toast.error('Vui lòng chọn tệp âm thanh mẫu từ 5 giây đến 3 phút.')
         return
       }
       fileToUpload = uploadedFile
@@ -269,7 +275,7 @@ export default function VoiceCloneModal({ isOpen, onClose, onVoiceCreated }: Voi
             <div>
               <h2 className="text-base sm:text-lg font-bold">Clone Giọng Nói Cá Nhân</h2>
               <p className="text-xs text-slate-500 dark:text-white/40">
-                Tạo bản sao giọng nói độc quyền từ mẫu thu âm 5–30 giây
+                Tạo bản sao giọng nói độc quyền từ mẫu thu âm 5 giây – 3 phút
               </p>
             </div>
           </div>
@@ -319,7 +325,7 @@ export default function VoiceCloneModal({ isOpen, onClose, onVoiceCreated }: Voi
               }`}
             >
               <Mic className="w-4 h-4" />
-              <span>Ghi âm trực tiếp (5–30s)</span>
+              <span>Ghi âm trực tiếp (5s – 3 phút)</span>
             </button>
             <button
               type="button"
@@ -343,7 +349,7 @@ export default function VoiceCloneModal({ isOpen, onClose, onVoiceCreated }: Voi
           {mode === 'record' && (
             <div className="p-4 sm:p-5 rounded-2xl border border-dashed border-slate-300 dark:border-white/[0.1] bg-slate-50/50 dark:bg-[#181C25]/40 flex flex-col items-center justify-center text-center space-y-3">
               <div className="text-2xl font-mono font-bold tracking-wider text-slate-800 dark:text-white">
-                00:{recordingSeconds < 10 ? `0${recordingSeconds}` : recordingSeconds} / 00:30
+                {formatTimer(recordingSeconds)} / 03:00
               </div>
 
               {!isRecording ? (
@@ -367,8 +373,7 @@ export default function VoiceCloneModal({ isOpen, onClose, onVoiceCreated }: Voi
               )}
 
               <p className="text-[11px] text-slate-500 dark:text-white/40 max-w-sm">
-                Hãy đọc rõ ràng một đoạn văn bản ngắn trong phòng yên tĩnh. Mẫu âm thanh đạt từ 10–25 giây
-                sẽ cho chất lượng giọng clone tốt nhất.
+                Hãy đọc rõ ràng một đoạn văn bản trong phòng yên tĩnh. Mẫu âm thanh từ 15 giây đến 1–2 phút sẽ cho chất lượng giọng clone tốt nhất.
               </p>
 
               {/* Nghe lại mẫu thu âm */}
@@ -411,7 +416,7 @@ export default function VoiceCloneModal({ isOpen, onClose, onVoiceCreated }: Voi
                 {uploadedFile ? uploadedFile.name : 'Nhấp để chọn tệp hoặc kéo thả vào đây'}
               </p>
               <p className="text-[11px] text-slate-500 dark:text-white/40 mt-1">
-                Hỗ trợ MP3, WAV, M4A, FLAC (5–30 giây, dung lượng tối đa 25MB)
+                Hỗ trợ MP3, WAV, M4A, FLAC (5 giây – 3 phút, dung lượng tối đa 25MB)
               </p>
 
               {audioUrl && (

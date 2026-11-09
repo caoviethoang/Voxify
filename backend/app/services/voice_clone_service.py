@@ -117,7 +117,7 @@ class VoiceCloneService:
         2. Chặn clone người nổi tiếng / chính trị gia
         3. Kiểm tra hạn mức theo gói
         4. Kiểm tra số dư credit
-        5. Lưu file & kiểm tra chất lượng âm thanh (5–30s, độ ồn)
+        5. Lưu file & kiểm tra chất lượng âm thanh (5s – 3 phút, độ ồn)
         6. Đăng ký với CloneProvider
         7. Khấu trừ credit 1 lần (500 credits)
         8. Lưu audit log đồng ý
@@ -177,8 +177,10 @@ class VoiceCloneService:
         with open(sample_file_path, "wb") as f_sample:
             f_sample.write(file_bytes)
 
-        # Kiểm tra chất lượng mẫu âm thanh (5–30s, độ nhiễu, volume)
-        val = await AudioService.validate_voice_sample(sample_file_path, min_duration=5.0, max_duration=30.0)
+        # Kiểm tra chất lượng mẫu âm thanh (5s – 3 phút, độ nhiễu, volume)
+        min_dur = getattr(settings, "clone_sample_min_duration", 5.0)
+        max_dur = getattr(settings, "clone_sample_max_duration", 180.0)
+        val = await AudioService.validate_voice_sample(sample_file_path, min_duration=min_dur, max_duration=max_dur)
         if not val.get("valid"):
             if os.path.exists(sample_file_path):
                 os.remove(sample_file_path)
