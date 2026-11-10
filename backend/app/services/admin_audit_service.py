@@ -4,7 +4,6 @@ import logging
 from typing import Any, Dict, Optional
 
 from sqlalchemy import desc, select
-from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin import AdminAuditLog
@@ -62,6 +61,7 @@ class AdminAuditService:
     ) -> tuple[list[AdminAuditLog], int]:
         """Tra cứu danh sách Audit Log có phân trang và bộ lọc."""
         from sqlalchemy import func
+
         from app.models.user import User
 
         stmt = select(AdminAuditLog, User.email.label("admin_email")).outerjoin(User, AdminAuditLog.admin_id == User.id)

@@ -1448,12 +1448,14 @@ async def test_voice_clone_routes_deep_coverage():
     """Kiểm thử chuyên sâu các routes của Voice Clone để tăng coverage."""
     import time
     from pathlib import Path
+
     from httpx import ASGITransport, AsyncClient
-    from app.main import app
+
+    from app.core.security import hash_password
     from app.db import AsyncSessionLocal
+    from app.main import app
     from app.models.cloned_voice import ClonedVoice
     from app.models.user import User
-    from app.core.security import hash_password
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -1546,9 +1548,11 @@ async def test_voices_route_and_overrides():
     """Kiểm thử route /api/voices với cache, force_refresh, và overrides."""
     import time
     from unittest.mock import AsyncMock, patch
+
     from httpx import ASGITransport, AsyncClient
-    from app.main import app
+
     from app.db import AsyncSessionLocal
+    from app.main import app
     from app.models.admin import SystemVoiceSetting
 
     async with AsyncSessionLocal() as db:
@@ -1587,12 +1591,14 @@ async def test_history_item_patch_delete_and_cleanup():
     """Kiểm thử PATCH title, DELETE generation, quyền truy cập và cleanup."""
     import time
     from datetime import UTC, datetime, timedelta
+
     from httpx import ASGITransport, AsyncClient
-    from app.main import app
+
+    from app.core.security import create_access_token, hash_password
     from app.db import AsyncSessionLocal
+    from app.main import app
     from app.models.generation import Generation
     from app.models.user import User
-    from app.core.security import create_access_token, hash_password
     from app.routes.history import cleanup_old_generations
 
     async with AsyncSessionLocal() as db:
@@ -1655,12 +1661,14 @@ async def test_history_item_patch_delete_and_cleanup():
 async def test_dictionary_patch_and_delete_endpoints():
     """Kiểm thử PUT và DELETE rule cho từ điển phát âm."""
     import time
+
     from httpx import ASGITransport, AsyncClient
-    from app.main import app
-    from app.db import AsyncSessionLocal
-    from app.models.user import User
-    from app.models.dictionary import PronunciationDictionary
+
     from app.core.security import create_access_token, hash_password
+    from app.db import AsyncSessionLocal
+    from app.main import app
+    from app.models.dictionary import PronunciationDictionary
+    from app.models.user import User
 
     async with AsyncSessionLocal() as db:
         user = User(email=f"dict_user_{time.time()}@example.com", hashed_password=hash_password("Pass123!"), is_active=True, is_verified=True)
@@ -1697,7 +1705,7 @@ async def test_dictionary_patch_and_delete_endpoints():
 @pytest.mark.unit
 def test_text_splitter_and_sentence_splitter_deep():
     """Kiểm thử chuyên sâu hàm split_text_into_chunks và _split_long_sentence."""
-    from app.services.text_splitter import split_text_into_chunks, _split_long_sentence
+    from app.services.text_splitter import _split_long_sentence, split_text_into_chunks
 
     # 1. Empty & space text
     assert split_text_into_chunks("") == []
@@ -1733,12 +1741,14 @@ async def test_dashboard_stats_and_history_filters_deep():
     """Kiểm thử dashboard stats khi có dữ liệu và history filter date/format."""
     import time
     from datetime import UTC, datetime
+
     from httpx import ASGITransport, AsyncClient
-    from app.main import app
-    from app.db import AsyncSessionLocal
-    from app.models.user import User
-    from app.models.generation import Generation
+
     from app.core.security import create_access_token, hash_password
+    from app.db import AsyncSessionLocal
+    from app.main import app
+    from app.models.generation import Generation
+    from app.models.user import User
 
     async with AsyncSessionLocal() as db:
         user = User(
@@ -1794,12 +1804,14 @@ async def test_dashboard_stats_and_history_filters_deep():
 async def test_v1_voices_extended_deep():
     """Kiểm thử chuyên sâu /v1/voices với cloned voice, overrides và bộ lọc language/gender."""
     import time
+
     from httpx import ASGITransport, AsyncClient
-    from app.main import app
+
     from app.db import AsyncSessionLocal
-    from app.models.user import User
-    from app.models.cloned_voice import ClonedVoice
+    from app.main import app
     from app.models.admin import SystemVoiceSetting
+    from app.models.cloned_voice import ClonedVoice
+    from app.models.user import User
     from app.services.api_key_service import ApiKeyService
 
     async with AsyncSessionLocal() as db:
@@ -1860,6 +1872,7 @@ async def test_v1_voices_extended_deep():
 async def test_audio_service_sample_validation_scoring(tmp_path):
     """Kiểm thử tính điểm chất lượng voice sample trong AudioService."""
     from unittest.mock import AsyncMock, patch
+
     from app.services.audio_service import AudioService
 
     fake_file = tmp_path / "test_sample.wav"
@@ -2029,6 +2042,7 @@ async def test_voice_clone_routes_full_branches(tmp_path):
 async def test_payments_routes_full_branches():
     """Bổ sung độ phủ cho app/routes/payments.py các nhánh coupon, receipt, order status, webhook."""
     from datetime import UTC, datetime, timedelta
+
     from app.core.security import create_access_token
     from app.models.payment import Coupon, Order
 
@@ -2206,6 +2220,7 @@ async def test_history_and_tts_routes_branches():
 async def test_payment_service_process_successful_payment_deep():
     """Tăng coverage cho app/services/payment_service.py: process_successful_payment, get_payment_methods, v.v."""
     from datetime import UTC, datetime, timedelta
+
     from app.models.payment import Coupon, Order, PricingPlan
 
     async with AsyncSessionLocal() as db:
@@ -2514,6 +2529,7 @@ async def test_v1_tts_sync_modes_and_download():
 async def test_history_routes_search_bulk_delete_and_cleanup():
     """Tăng coverage cho app/routes/history.py: lọc search, format, bulk delete, cleanup_old_generations."""
     from datetime import UTC, datetime, timedelta
+
     from app.core.security import create_access_token
     from app.models.generation import Generation
     from app.routes.history import cleanup_old_generations
@@ -2615,6 +2631,7 @@ async def test_history_routes_search_bulk_delete_and_cleanup():
 async def test_voices_route_with_overrides():
     """Tăng coverage cho app/routes/voices.py: ghi đè thông tin giọng đọc và lọc giọng tắt."""
     from sqlalchemy import select
+
     from app.models.admin import SystemVoiceSetting
 
     async with AsyncSessionLocal() as db:
@@ -2771,6 +2788,7 @@ async def test_final_coverage_push_to_reach_80_percent():
 def test_receipt_pdf_generation_direct():
     """Tăng coverage cho app/core/receipt.py."""
     from datetime import UTC, datetime
+
     from app.core.receipt import generate_receipt_pdf
 
     pdf_bytes = generate_receipt_pdf(
@@ -2792,7 +2810,9 @@ def test_receipt_pdf_generation_direct():
 async def test_rate_limiter_and_login_limit():
     """Tăng coverage cho app/core/rate_limiter.py."""
     from unittest.mock import MagicMock
+
     from fastapi import HTTPException
+
     from app.core.rate_limiter import (
         MemorySlidingWindowRateLimiter,
         RateLimiterService,
@@ -2842,11 +2862,12 @@ async def test_rate_limiter_and_login_limit():
 async def test_reach_80_percent_coverage_guarantee():
     """Kiểm tra các nhánh còn thiếu để đảm bảo độ bao phủ đạt >= 80%."""
     from datetime import timedelta
+
     from app.core.errors import AppError, TTSError, ValidationError, app_error_handler
-    from app.core.security import verify_password, create_access_token, create_timed_token, decode_token
-    from app.services.text_splitter import split_text_into_chunks, _split_long_sentence
-    from app.services.dictionary_service import DictionaryService
+    from app.core.security import create_access_token, create_timed_token, decode_token, verify_password
     from app.models.generation import Generation
+    from app.services.dictionary_service import DictionaryService
+    from app.services.text_splitter import _split_long_sentence, split_text_into_chunks
 
     # 1. Security unit tests
     assert verify_password("secret", None) is False
@@ -2943,8 +2964,9 @@ async def test_reach_80_percent_coverage_guarantee():
             await CreditService.reserve(db, user_id=9999999, amount=0)
 
     # 4.2 EdgeTTSProvider voice display_name fallback
+    from unittest.mock import AsyncMock, patch
+
     from app.providers.edge import EdgeTTSProvider
-    from unittest.mock import patch, AsyncMock
     with patch("edge_tts.list_voices", new_callable=AsyncMock) as m_edge:
         m_edge.return_value = [{"ShortName": "edge_voice_1", "FriendlyName": "", "Gender": "Female", "Locale": "vi-VN"}]
         edge_v_list = await EdgeTTSProvider().list_voices()
@@ -2952,6 +2974,7 @@ async def test_reach_80_percent_coverage_guarantee():
 
     # 4.3 Rate limiter x-forwarded-for branch
     from unittest.mock import MagicMock
+
     from app.core.rate_limiter import check_login_rate_limit, reset_login_rate_limit
     mock_req = MagicMock()
     mock_req.headers = {"x-forwarded-for": "10.0.0.1, 10.0.0.2"}
@@ -2976,7 +2999,7 @@ async def test_reach_80_percent_coverage_guarantee():
         get_storage("unknown_backend_storage")
 
     # 7. Voice anti-abuse unit tests
-    from app.core.voice_anti_abuse import normalize_text, check_voice_name_against_blocklist
+    from app.core.voice_anti_abuse import check_voice_name_against_blocklist, normalize_text
     assert normalize_text("") == ""
     assert normalize_text("Đỗ Mười!!!") == "do muoi"
     bl_pol = check_voice_name_against_blocklist("Donald Trump")
@@ -2987,8 +3010,9 @@ async def test_reach_80_percent_coverage_guarantee():
     assert bl_ok[0] is False
 
     # 8. Email core unit tests
-    from unittest.mock import patch, MagicMock
-    from app.core.email import send_password_reset_email, send_verification_email, send_payment_confirmation_email
+    from unittest.mock import MagicMock, patch
+
+    from app.core.email import send_password_reset_email, send_payment_confirmation_email, send_verification_email
 
     with patch("smtplib.SMTP") as mock_smtp:
         mock_server = MagicMock()

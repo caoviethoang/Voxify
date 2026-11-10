@@ -176,9 +176,9 @@ async def list_users(
 
     total = (await db.execute(count_stmt)).scalar() or 0
     p = page if isinstance(page, int) else 1
-    l = limit if isinstance(limit, int) else 20
-    offset = (p - 1) * l
-    stmt = stmt.order_by(desc(User.created_at)).offset(offset).limit(l)
+    page_size = limit if isinstance(limit, int) else 20
+    offset = (p - 1) * page_size
+    stmt = stmt.order_by(desc(User.created_at)).offset(offset).limit(page_size)
     users = list((await db.execute(stmt)).scalars().all())
 
     items: List[AdminUserListItem] = []
@@ -201,12 +201,12 @@ async def list_users(
             created_at=u.created_at,
         ))
 
-    total_pages = max(1, (total + l - 1) // l)
+    total_pages = max(1, (total + page_size - 1) // page_size)
     return AdminUserListResponse(
         items=items,
         total=total,
         page=p,
-        limit=l,
+        limit=page_size,
         total_pages=total_pages,
     )
 
@@ -479,9 +479,9 @@ async def list_jobs(
 
     total = (await db.execute(count_stmt)).scalar() or 0
     p = page if isinstance(page, int) else 1
-    l = limit if isinstance(limit, int) else 20
-    offset = (p - 1) * l
-    stmt = stmt.order_by(desc(Generation.created_at)).offset(offset).limit(l)
+    page_size = limit if isinstance(limit, int) else 20
+    offset = (p - 1) * page_size
+    stmt = stmt.order_by(desc(Generation.created_at)).offset(offset).limit(page_size)
     rows = (await db.execute(stmt)).all()
 
     items: List[AdminJobListItem] = []
@@ -502,12 +502,12 @@ async def list_jobs(
             file_path=gen.file_path,
         ))
 
-    total_pages = max(1, (total + l - 1) // l)
+    total_pages = max(1, (total + page_size - 1) // page_size)
     return AdminJobListResponse(
         items=items,
         total=total,
         page=p,
-        limit=l,
+        limit=page_size,
         total_pages=total_pages,
     )
 
@@ -854,9 +854,9 @@ async def list_admin_orders(
 
     total = (await db.execute(count_stmt)).scalar() or 0
     p = page if isinstance(page, int) else 1
-    l = limit if isinstance(limit, int) else 20
-    offset = (p - 1) * l
-    stmt = stmt.order_by(desc(Order.created_at)).offset(offset).limit(l)
+    page_size = limit if isinstance(limit, int) else 20
+    offset = (p - 1) * page_size
+    stmt = stmt.order_by(desc(Order.created_at)).offset(offset).limit(page_size)
     rows = (await db.execute(stmt)).all()
 
     items: List[AdminOrderListItem] = []
@@ -875,12 +875,12 @@ async def list_admin_orders(
             created_at=o.created_at,
         ))
 
-    total_pages = max(1, (total + l - 1) // l)
+    total_pages = max(1, (total + page_size - 1) // page_size)
     return AdminOrderListResponse(
         items=items,
         total=total,
         page=p,
-        limit=l,
+        limit=page_size,
         total_pages=total_pages,
     )
 
@@ -1084,14 +1084,14 @@ async def get_audit_logs(
     admin: User = Depends(get_current_admin_user),
 ):
     p = page if isinstance(page, int) else 1
-    l = limit if isinstance(limit, int) else 20
+    page_size = limit if isinstance(limit, int) else 20
     items, total = await AdminAuditService.list_logs(
         db=db,
         action=action,
         target_type=target_type,
         admin_id=admin_id,
         page=p,
-        limit=l,
+        limit=page_size,
     )
 
     result_items: List[AdminAuditLogItem] = []
@@ -1115,11 +1115,11 @@ async def get_audit_logs(
             created_at=it.created_at,
         ))
 
-    total_pages = max(1, (total + l - 1) // l)
+    total_pages = max(1, (total + page_size - 1) // page_size)
     return AdminAuditLogResponse(
         items=result_items,
         total=total,
         page=p,
-        limit=l,
+        limit=page_size,
         total_pages=total_pages,
     )
