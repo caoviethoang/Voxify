@@ -39,18 +39,21 @@ class CreditService:
             return cls._user_locks[user_id]
 
     @staticmethod
-    def calculate_cost(char_count: int, provider: str = "edge", voice: str = "") -> int:
+    def calculate_cost(char_count: int, provider: str = "edge", voice: str = "", voice_multiplier: Optional[float] = None) -> int:
         """
         Quy tắc tính credit:
         1 ký tự = 1 credit (từ config).
         Hệ số nhân theo provider (edge: 1.0, azure: 1.2, elevenlabs: 2.0).
         Giọng Clone: tính theo hệ số riêng settings.clone_voice_multiplier (1.5x).
+        Nếu có voice_multiplier từ cấu hình Admin thì ưu tiên sử dụng.
         """
         settings = get_settings()
         if char_count <= 0:
             return 0
 
-        if voice.startswith("clone_") or provider.lower() == "clone":
+        if voice_multiplier is not None and voice_multiplier > 0:
+            multiplier = voice_multiplier
+        elif voice.startswith("clone_") or provider.lower() == "clone":
             multiplier = getattr(settings, "clone_voice_multiplier", 1.5)
         else:
             multipliers = settings.credit_provider_multipliers or {}
