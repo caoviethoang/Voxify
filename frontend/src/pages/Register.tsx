@@ -128,6 +128,18 @@ export default function Register() {
             />
           </div>
 
+          <p className="text-[11px] text-white/40 text-center leading-relaxed">
+            Bằng việc nhấn Đăng ký, bạn đồng ý với{' '}
+            <Link to="/terms" target="_blank" className="text-brand-400 hover:underline">
+              Điều khoản dịch vụ
+            </Link>{' '}
+            và{' '}
+            <Link to="/privacy" target="_blank" className="text-brand-400 hover:underline">
+              Chính sách bảo mật
+            </Link>{' '}
+            của Voxify.
+          </p>
+
           <button
             type="submit"
             disabled={isLoading}

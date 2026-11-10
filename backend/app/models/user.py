@@ -22,6 +22,13 @@ class User(Base):
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     google_id: Mapped[Optional[str]] = mapped_column(String(100), unique=True, nullable=True, index=True)
 
+    # Xác thực 2 bước (2FA / TOTP) & An ninh kiểm duyệt (Issue #16)
+    two_factor_secret: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    two_factor_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    violation_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_banned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    ban_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
     # Cache cột users.credit_balance cập nhật trong cùng transaction DB (sổ cái ledger)
     credit_balance: Mapped[int] = mapped_column(Integer, default=10000, nullable=False)
     # Giữ cột credits để tương thích ngược với code cũ / migration cũ

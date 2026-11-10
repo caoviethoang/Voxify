@@ -3,9 +3,10 @@ import logging
 import time
 from collections import defaultdict
 from threading import Lock
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 
@@ -58,6 +59,93 @@ def reset_login_rate_limit(request: Request) -> None:
     with _lock:
         if client_ip in _attempts:
             _attempts.pop(client_ip, None)
+
+
+# ----------------------------------------------------------------------
+# 1.1 Rate Limiting cho API tạo Job & Giới hạn đồng thời (Issue #16)
+# ----------------------------------------------------------------------
+_job_creation_attempts: dict[str, list[float]] = defaultdict(list)
+_job_lock = Lock()
+
+CONCURRENT_JOB_LIMITS = {
+    "free": 2,
+    "pro": 5,
+    "vip": 10,
+    "admin": 20,
+}
+
+
+def check_job_creation_rate_limit(
+    request: Request,
+    user_id: Optional[int] = None,
+    max_requests: int = 30,
+    window_seconds: int = 60,
+) -> None:
+    """
+    Giới hạn tốc độ tạo Job (TTS / Voice Clone) theo IP và theo User ID (30 req / phút).
+    Ngăn chặn bot spam làm cạn kiệt tài nguyên máy chủ.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+
+    key = f"user:{user_id}" if user_id else f"ip:{client_ip}"
+    now = time.time()
+    cutoff = now - window_seconds
+
+    with _job_lock:
+        recent = [t for t in _job_creation_attempts[key] if t > cutoff]
+        if len(recent) >= max_requests:
+            retry_after = int(window_seconds - (now - recent[0])) + 1
+            raise HTTPException(
+                status_code=429,
+                detail=f"Tần suất tạo tác vụ quá nhanh. Vui lòng thử lại sau {retry_after} giây.",
+                headers={"Retry-After": str(retry_after)},
+            )
+        recent.append(now)
+        _job_creation_attempts[key] = recent
+
+
+def reset_job_rate_limits() -> None:
+    """Reset bộ đếm rate limit tạo job (phục vụ unit test)."""
+    with _job_lock:
+        _job_creation_attempts.clear()
+
+
+async def check_user_concurrent_jobs(
+    db: AsyncSession,
+    user_id: int,
+    plan_tier: str = "free",
+    is_admin: bool = False,
+) -> None:
+    """
+    Giới hạn số tác vụ đồng thời (concurrent jobs) đang chạy của mỗi người dùng (Issue #16).
+    Free: 2, Pro: 5, VIP: 10, Admin: 20 tác vụ cùng lúc.
+    """
+    from sqlalchemy import func, select
+
+    from app.models.generation import Generation
+
+    tier = "admin" if is_admin else (plan_tier or "free").lower()
+    max_concurrent = CONCURRENT_JOB_LIMITS.get(tier, 2)
+
+    # Đếm số job đang ở trạng thái 'queued' hoặc 'processing'
+    active_count_query = select(func.count(Generation.id)).where(
+        Generation.user_id == user_id,
+        Generation.status.in_(["queued", "processing"]),
+    )
+    active_jobs = (await db.execute(active_count_query)).scalar() or 0
+
+    if active_jobs >= max_concurrent:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Bạn đang có {active_jobs} tác vụ đang chờ/đang xử lý. "
+                f"Hạn mức gói {tier.upper()} là {max_concurrent} tác vụ cùng lúc. "
+                "Vui lòng đợi các tác vụ trước hoàn tất."
+            ),
+        )
 
 
 # ----------------------------------------------------------------------

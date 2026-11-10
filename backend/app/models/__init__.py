@@ -1,6 +1,7 @@
 from app.models.admin import (
     AdminAuditLog,
     AffiliateWithdrawal,
+    SecurityViolationLog,
     SystemSetting,
     SystemVoiceSetting,
 )
@@ -32,4 +33,5 @@ __all__ = [
     "SystemVoiceSetting",
     "SystemSetting",
     "AffiliateWithdrawal",
+    "SecurityViolationLog",
 ]

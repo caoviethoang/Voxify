@@ -1,9 +1,11 @@
 """FastAPI application entry point."""
 import logging
+import os
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -11,6 +13,9 @@ from fastapi.staticfiles import StaticFiles
 from app.config import get_settings
 from app.core.errors import AppError, app_error_handler
 from app.core.logging import setup_logging
+from app.core.metrics import PrometheusMetricsMiddleware, metrics
+from app.core.security_headers import SecurityHeadersMiddleware
+from app.core.sentry import init_sentry
 from app.db import create_tables
 from app.dependencies import get_current_active_user, get_tts_service
 from app.models.user import User
@@ -33,8 +38,10 @@ from app.routes.history import cleanup_old_generations
 from app.schemas.auth import UserOut
 
 settings = get_settings()
-setup_logging("DEBUG" if settings.debug else "INFO")
+setup_logging("DEBUG" if settings.debug else "INFO", log_format=getattr(settings, "log_format", "text"))
+init_sentry(settings.sentry_dsn)
 logger = logging.getLogger("app.main")
+_server_start_time = time.time()
 
 STORAGE_DIR = Path(settings.storage_path)
 
@@ -95,10 +102,22 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — cho phép frontend Vite dev server (localhost:5173)
+# 1. Prometheus Metrics Middleware (đo lường latency & request count)
+app.add_middleware(PrometheusMetricsMiddleware)
+
+# 2. Security Headers Middleware (CSP, HSTS, X-Frame-Options...)
+app.add_middleware(SecurityHeadersMiddleware)
+
+# 3. CORS — Cấu hình domain chuẩn bảo mật (Issue #16)
+cors_allowed = list(getattr(settings, "cors_origins", []))
+if settings.frontend_url and settings.frontend_url not in cors_allowed:
+    cors_allowed.append(settings.frontend_url)
+if "http://localhost:5173" not in cors_allowed:
+    cors_allowed.append("http://localhost:5173")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_allowed,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -129,9 +148,54 @@ async def get_me_alias(current_user: User = Depends(get_current_active_user)):
     return UserOut.model_validate(current_user)
 
 
-@app.get("/health", include_in_schema=False)
+@app.get("/health", summary="Kiểm tra trạng thái hoạt động hệ thống (Health Check)")
 async def health_check():
-    return {"status": "ok", "app": settings.app_name, "version": "2.0.0"}
+    """Kiểm tra chi tiết tình trạng database, lưu trữ và thời gian uptime (Issue #16)."""
+    db_status = "ok"
+    db_latency_ms = 0.0
+    t0 = time.time()
+    try:
+        from sqlalchemy import text
+
+        from app.db import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+        db_latency_ms = round((time.time() - t0) * 1000, 2)
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+
+    storage_writable = STORAGE_DIR.exists() and os.access(str(STORAGE_DIR), os.W_OK)
+    storage_status = "writable" if storage_writable else "degraded"
+    uptime = round(time.time() - _server_start_time, 2)
+    is_healthy = (db_status == "ok")
+
+    return JSONResponse(
+        status_code=200 if is_healthy else 503,
+        content={
+            "status": "ok" if is_healthy else "unhealthy",
+            "app": settings.app_name,
+            "version": "2.0.0",
+            "uptime_seconds": uptime,
+            "database": {
+                "status": db_status,
+                "latency_ms": db_latency_ms,
+            },
+            "storage": {
+                "status": storage_status,
+                "path": str(STORAGE_DIR),
+            },
+        },
+    )
+
+
+@app.get("/metrics", summary="Chỉ số giám sát hệ thống chuẩn Prometheus", include_in_schema=False)
+async def prometheus_metrics():
+    """Xuất các chỉ số hoạt động cho Prometheus scraper thu thập (Issue #16)."""
+    metrics_text = metrics.export_prometheus_text()
+    return Response(
+        content=metrics_text,
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
 
 
 # Phục vụ file audio đã lưu

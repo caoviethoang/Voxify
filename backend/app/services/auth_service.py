@@ -19,6 +19,7 @@ from app.core.security import (
     hash_token,
     verify_password,
 )
+from app.core.security_validation import validate_password_strength
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
 
@@ -54,6 +55,11 @@ class AuthService:
         existing = await AuthService.get_user_by_email(db, clean_email)
         if existing:
             raise ValueError("Email này đã được sử dụng. Vui lòng đăng nhập hoặc dùng email khác.")
+
+        # Chính sách mật khẩu mạnh (Issue #16)
+        is_strong, pw_msg = validate_password_strength(password)
+        if not is_strong:
+            raise ValueError(pw_msg)
 
         user = User(
             email=clean_email,
@@ -208,6 +214,11 @@ class AuthService:
         user = await AuthService.get_user_by_email(db, email)
         if not user:
             raise ValueError("Người dùng không tồn tại.")
+
+        # Chính sách mật khẩu mạnh (Issue #16)
+        is_strong, pw_msg = validate_password_strength(new_password)
+        if not is_strong:
+            raise ValueError(pw_msg)
 
         user.hashed_password = hash_password(new_password)
         await db.commit()

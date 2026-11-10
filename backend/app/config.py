@@ -24,6 +24,25 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 30
+    cors_origins: list[str] = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+    ]
+    max_upload_size_mb: int = 25
+    max_concurrent_jobs_free: int = 2
+    max_concurrent_jobs_pro: int = 5
+    max_concurrent_jobs_vip: int = 10
+    max_concurrent_jobs_admin: int = 20
+
+    # Kiểm duyệt nội dung & Chống lạm dụng (Issue #16)
+    moderation_enabled: bool = True
+    moderation_max_violations_before_ban: int = 3
+
+    # Giám sát & Quan sát (Observability - Issue #16)
+    log_format: str = "text"  # "text" | "json"
+    sentry_dsn: str = ""
 
     # Xác thực email (bật/tắt)
     require_email_verification: bool = False

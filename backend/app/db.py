@@ -81,6 +81,16 @@ async def create_tables() -> None:
                         sync_conn.execute(text("UPDATE users SET credit_balance = credits WHERE credit_balance IS NULL OR credit_balance = 0"))
                 if user_cols and "subscription_tier" not in user_cols:
                     sync_conn.execute(text("ALTER TABLE users ADD COLUMN subscription_tier VARCHAR(50) NOT NULL DEFAULT 'free'"))
+                if user_cols and "two_factor_secret" not in user_cols:
+                    sync_conn.execute(text("ALTER TABLE users ADD COLUMN two_factor_secret VARCHAR(64)"))
+                if user_cols and "two_factor_enabled" not in user_cols:
+                    sync_conn.execute(text("ALTER TABLE users ADD COLUMN two_factor_enabled BOOLEAN NOT NULL DEFAULT 0"))
+                if user_cols and "violation_count" not in user_cols:
+                    sync_conn.execute(text("ALTER TABLE users ADD COLUMN violation_count INTEGER NOT NULL DEFAULT 0"))
+                if user_cols and "is_banned" not in user_cols:
+                    sync_conn.execute(text("ALTER TABLE users ADD COLUMN is_banned BOOLEAN NOT NULL DEFAULT 0"))
+                if user_cols and "ban_reason" not in user_cols:
+                    sync_conn.execute(text("ALTER TABLE users ADD COLUMN ban_reason VARCHAR(255)"))
 
                 tx_cols = [r[1] for r in sync_conn.execute(text("PRAGMA table_info(credit_transactions)")).fetchall()]
                 if tx_cols:
