@@ -38,6 +38,7 @@ class UserOut(BaseModel):
     is_verified: bool
     credits: int
     credit_balance: Optional[int] = None
+    two_factor_enabled: Optional[bool] = False
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -47,7 +48,29 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
-    user: UserOut
+    user: Optional[UserOut] = None
+    requires_2fa: bool = False
+    temp_token: Optional[str] = None
+
+
+class TwoFactorSetupResponse(BaseModel):
+    secret: str
+    qr_uri: str
+    manual_entry_key: str
+
+
+class TwoFactorVerifyRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=6, description="Mã xác thực 6 chữ số")
+    temp_token: Optional[str] = Field(default=None, description="Token tạm thời khi đăng nhập cần 2FA")
+
+
+class PasswordStrengthRequest(BaseModel):
+    password: str
+
+
+class PasswordStrengthResponse(BaseModel):
+    is_valid: bool
+    message: str
 
 
 class MessageResponse(BaseModel):

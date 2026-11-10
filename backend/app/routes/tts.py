@@ -5,12 +5,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.errors import AppError
+from app.core.rate_limiter import check_job_creation_rate_limit, check_user_concurrent_jobs
+from app.core.security_validation import validate_input_text
 from app.db import get_db
 from app.dependencies import get_current_active_user, get_optional_current_user, get_tts_service
 from app.models.generation import Generation
@@ -21,6 +23,7 @@ from app.schemas.tts import (
     TTSRequest,
 )
 from app.services.audio_service import AudioService
+from app.services.content_moderation_service import ContentModerationService
 from app.services.credit_service import CreditService, InsufficientCreditsError
 from app.services.storage_service import StorageService
 from app.services.tts_job_service import TTSJobService
@@ -69,27 +72,50 @@ def _to_job_response(gen: Generation) -> TTSJobResponse:
 @router.post("/jobs", response_model=TTSJobResponse, status_code=status.HTTP_202_ACCEPTED, summary="Tạo Job TTS bất đồng bộ")
 async def create_tts_job(
     req: TTSJobCreateRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_current_user),
 ):
     """
     Tạo job bất đồng bộ:
-    1. Kiểm tra văn bản và khấu trừ credit ngay lập tức (reserve).
-    2. Đưa vào hàng đợi worker xử lý ngầm (tách câu ~2500 ký tự, ghép ffmpeg, tạo SRT/VTT).
-    3. Trả về thông tin job để client polling / theo dõi tiến độ.
+    1. Kiểm tra rate limit & giới hạn tài nguyên concurrent jobs (Issue #16).
+    2. Kiểm tra văn bản & kiểm duyệt nội dung an toàn (chống bạo lực, lừa đảo, giả mạo).
+    3. Khấu trừ credit ngay lập tức (reserve).
+    4. Đưa vào hàng đợi worker xử lý ngầm và trả về thông tin job.
     """
-    clean_text = req.text.strip()
+    client_ip = raw_request.client.host if raw_request.client else None
+    if "x-forwarded-for" in raw_request.headers:
+        client_ip = raw_request.headers["x-forwarded-for"].split(",")[0].strip()
+
+    # Rate limiting chống spam
+    check_job_creation_rate_limit(raw_request, user_id=current_user.id if current_user else None)
+
+    if current_user:
+        if getattr(current_user, "is_banned", False) or not current_user.is_active:
+            raise HTTPException(status_code=403, detail="Tài khoản của bạn đã bị khóa do vi phạm chính sách kiểm duyệt.")
+        await check_user_concurrent_jobs(
+            db=db,
+            user_id=current_user.id,
+            plan_tier=current_user.subscription_tier,
+            is_admin=current_user.is_admin,
+        )
+
+    # Xác thực độ dài và loại bỏ ký tự độc hại
+    try:
+        clean_text = validate_input_text(req.text, max_chars=100000)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     if not clean_text:
         raise HTTPException(status_code=400, detail="Văn bản không được để trống.")
 
-    get_settings()
-    # Hỗ trợ văn bản dài cho background job (tối đa 100.000 ký tự)
-    max_job_chars = 100000
-    if len(clean_text) > max_job_chars:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Văn bản vượt quá giới hạn tối đa {max_job_chars:,} ký tự.",
-        )
+    # Kiểm duyệt nội dung tự động (Content Moderation - Issue #16)
+    await ContentModerationService.check_and_enforce(
+        db=db,
+        text=clean_text,
+        user=current_user,
+        ip_address=client_ip,
+    )
 
     try:
         job = await _job_service.create_job(
@@ -225,24 +251,53 @@ async def get_job_subtitles(
 @router.post("", summary="Chuyển đổi văn bản thành file âm thanh MP3 (đồng bộ / nghe thử)")
 async def synthesize_speech(
     request: TTSRequest,
+    raw_request: Request,
     tts_service: TTSService = Depends(get_tts_service),
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_current_user),
 ):
-    clean_text = request.text.strip()
+    client_ip = raw_request.client.host if raw_request.client else None
+    if "x-forwarded-for" in raw_request.headers:
+        client_ip = raw_request.headers["x-forwarded-for"].split(",")[0].strip()
+
+    # Rate limiting
+    check_job_creation_rate_limit(raw_request, user_id=current_user.id if current_user else None)
+
+    is_preview = bool(request.preview)
+
+    if current_user:
+        if getattr(current_user, "is_banned", False) or not current_user.is_active:
+            raise HTTPException(status_code=403, detail="Tài khoản của bạn đã bị khóa do vi phạm chính sách kiểm duyệt.")
+        if not is_preview:
+            await check_user_concurrent_jobs(
+                db=db,
+                user_id=current_user.id,
+                plan_tier=current_user.subscription_tier,
+                is_admin=current_user.is_admin,
+            )
+
+    settings = get_settings()
+    max_allowed = 200 if is_preview else settings.max_chars
+
+    # Xác thực dữ liệu đầu vào & chống ký tự độc hại
+    try:
+        clean_text = validate_input_text(request.text, max_chars=max_allowed)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     if not clean_text:
         raise HTTPException(status_code=400, detail="Văn bản không được để trống.")
 
-    settings = get_settings()
-    if len(clean_text) > settings.max_chars:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Văn bản vượt quá giới hạn tối đa {settings.max_chars:,} ký tự.",
-        )
-
-    is_preview = bool(request.preview)
     if is_preview:
         clean_text = clean_text[:200]
+
+    # Kiểm duyệt nội dung tự động (Content Moderation - Issue #16)
+    await ContentModerationService.check_and_enforce(
+        db=db,
+        text=clean_text,
+        user=current_user,
+        ip_address=client_ip,
+    )
 
     cost = 0
     tx = None

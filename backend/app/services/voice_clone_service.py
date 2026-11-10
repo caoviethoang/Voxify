@@ -12,6 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.errors import AppError
+from app.core.security_validation import (
+    safe_path_join,
+    sanitize_filename,
+    validate_audio_magic_bytes,
+)
 from app.core.voice_anti_abuse import (
     VALID_ABUSE_REASONS,
     check_voice_name_against_blocklist,
@@ -158,21 +163,40 @@ class VoiceCloneService:
         if user.credit_balance < creation_fee and not user.is_admin:
             raise InsufficientCreditsError(required=creation_fee, current=user.credit_balance)
 
-        # 5. Lưu tệp âm thanh mẫu
+        # 4.1. Xác thực kích thước file và Magic Bytes tệp âm thanh thực tế (Issue #16)
+        max_bytes = getattr(settings, "max_upload_size_mb", 25) * 1024 * 1024
+        if len(file_bytes) > max_bytes:
+            raise AppError(
+                "FILE_TOO_LARGE",
+                f"Kích thước tệp âm thanh vượt quá giới hạn tối đa {getattr(settings, 'max_upload_size_mb', 25)}MB.",
+                400,
+            )
+
+        is_valid_magic, _, suggested_ext = validate_audio_magic_bytes(file_bytes)
+        if not is_valid_magic:
+            raise AppError(
+                "INVALID_FILE_TYPE",
+                "Tệp tải lên không phải là tệp âm thanh hợp lệ hoặc tệp bị hỏng (MIME/Magic bytes không khớp).",
+                400,
+            )
+
+        # 5. Lưu tệp âm thanh mẫu an toàn (Chống Path Traversal)
         storage_base = Path(getattr(settings, "clone_storage_path", "./storage/clones"))
         samples_dir = storage_base / "samples"
         previews_dir = storage_base / "previews"
         samples_dir.mkdir(parents=True, exist_ok=True)
         previews_dir.mkdir(parents=True, exist_ok=True)
 
-        ext = Path(filename).suffix.lower() or ".mp3"
+        clean_original_filename = sanitize_filename(filename, default_name="sample.mp3")
+        ext = Path(clean_original_filename).suffix.lower() or suggested_ext or ".mp3"
         if ext not in (".mp3", ".wav", ".m4a", ".ogg", ".flac", ".webm"):
-            ext = ".mp3"
+            ext = suggested_ext or ".mp3"
 
         safe_slug = re.sub(r"[^a-zA-Z0-9_]", "_", clean_name)[:20]
         unique_token = uuid.uuid4().hex[:10]
         voice_id = f"clone_{user.id}_{int(datetime.now().timestamp())}_{safe_slug}_{unique_token}"
-        sample_file_path = str(samples_dir / f"{voice_id}_sample{ext}")
+        safe_sample_path = safe_path_join(samples_dir, f"{voice_id}_sample{ext}")
+        sample_file_path = str(safe_sample_path)
 
         with open(sample_file_path, "wb") as f_sample:
             f_sample.write(file_bytes)

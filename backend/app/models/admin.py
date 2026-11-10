@@ -98,3 +98,26 @@ class AffiliateWithdrawal(Base):
         onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
+
+
+class SecurityViolationLog(Base):
+    """Ghi nhận sự cố vi phạm an ninh, kiểm duyệt nội dung và xâm phạm hệ thống (Issue #16)."""
+    __tablename__ = "security_violation_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    violation_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)  # content_moderation | path_traversal | upload_invalid | rate_limit_abuse
+    category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    snippet: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    action_taken: Mapped[str] = mapped_column(String(50), default="blocked", nullable=False)  # blocked | warned | account_banned
+    details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        nullable=False,
+        index=True,
+    )

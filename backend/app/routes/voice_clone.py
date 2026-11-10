@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
+from app.core.rate_limiter import check_job_creation_rate_limit
 from app.db import get_db
 from app.dependencies import get_current_active_user, get_optional_current_user
 from app.models.cloned_voice import ClonedVoice
@@ -94,6 +95,11 @@ async def create_voice_clone(
     clean_name = name.strip()
     if not clean_name:
         raise HTTPException(status_code=400, detail="Tên giọng đọc không được để trống.")
+
+    # Rate limiting & Kiểm tra tài khoản (Issue #16)
+    check_job_creation_rate_limit(request, user_id=current_user.id)
+    if getattr(current_user, "is_banned", False) or not current_user.is_active:
+        raise HTTPException(status_code=403, detail="Tài khoản của bạn đã bị khóa do vi phạm chính sách kiểm duyệt.")
 
     # Đọc nội dung tệp
     content = await audio_file.read()
