@@ -23,6 +23,7 @@ engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
     connect_args=connect_args,
+    query_cache_size=0,
     **pool_kwargs,
 )
 

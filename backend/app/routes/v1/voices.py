@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.dependencies import get_tts_service
+from app.models.admin import SystemVoiceSetting
 from app.models.api_key import ApiKey
 from app.models.cloned_voice import ClonedVoice
 from app.models.user import User
@@ -35,7 +36,28 @@ async def list_v1_voices(
     api_key, user = auth_data
 
     # 1. Giọng hệ thống
-    system_voices = await tts_service.get_voices()
+    raw_system_voices = await tts_service.get_voices()
+
+    # Lấy override từ SystemVoiceSetting
+    settings_res = await db.execute(select(SystemVoiceSetting))
+    settings_map = {s.voice_id: s for s in settings_res.scalars().all()}
+
+    system_voices: List[Dict[str, Any]] = []
+    for v in raw_system_voices:
+        vid = v.get("id", "")
+        cfg = settings_map.get(vid)
+        if cfg and not cfg.is_active:
+            continue
+        merged = dict(v)
+        if cfg:
+            if cfg.name:
+                merged["name"] = cfg.name
+            merged["tier"] = cfg.tier
+            merged["credit_multiplier"] = cfg.credit_multiplier
+        else:
+            merged["tier"] = "free"
+            merged["credit_multiplier"] = 1.0
+        system_voices.append(merged)
 
     # 2. Giọng clone của user
     stmt_clones = (

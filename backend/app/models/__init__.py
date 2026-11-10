@@ -1,3 +1,9 @@
+from app.models.admin import (
+    AdminAuditLog,
+    AffiliateWithdrawal,
+    SystemSetting,
+    SystemVoiceSetting,
+)
 from app.models.api_key import ApiKey, ApiUsageLog
 from app.models.cloned_voice import ClonedVoice, VoiceAbuseReport, VoiceConsentLog
 from app.models.credit import CreditTransaction
@@ -22,4 +28,8 @@ __all__ = [
     "VoiceAbuseReport",
     "ApiKey",
     "ApiUsageLog",
+    "AdminAuditLog",
+    "SystemVoiceSetting",
+    "SystemSetting",
+    "AffiliateWithdrawal",
 ]

@@ -127,11 +127,18 @@ class EdgeTTSProvider(TTSProvider):
             .replace('‘', "'")
             .replace('’', "'")
             .replace('…', '...')
+            .replace('\u00a0', ' ')
+            .replace('\u200b', '')
+            .strip()
         )
 
         for attempt in range(1, max_retries + 1):
             try:
                 current_chunk = cleaned_chunk
+                curr_rate = rate
+                curr_pitch = pitch
+                curr_volume = volume
+
                 # Nếu gặp lỗi ở lần thử đầu, chuẩn hóa dấu câu và thử giọng fallback tương thích
                 if attempt >= 2:
                     current_chunk = re.sub(r'[!¡]+', '.', current_chunk)
@@ -141,12 +148,18 @@ class EdgeTTSProvider(TTSProvider):
                     elif target_voice == "vi-VN-NamMinhNeural":
                         target_voice = "vi-VN-HoaiMyNeural"
 
+                # Nếu thử đến lần 3 vẫn lỗi, reset các thông số âm sắc về mặc định để tránh Microsoft từ chối
+                if attempt >= 3:
+                    curr_rate = "+0%"
+                    curr_pitch = "+0Hz"
+                    curr_volume = "+0%"
+
                 communicate = edge_tts.Communicate(
                     text=current_chunk,
                     voice=target_voice,
-                    rate=rate,
-                    pitch=pitch,
-                    volume=volume,
+                    rate=curr_rate,
+                    pitch=curr_pitch,
+                    volume=curr_volume,
                 )
 
                 audio_chunks: List[bytes] = []

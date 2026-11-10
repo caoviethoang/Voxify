@@ -237,6 +237,16 @@ async def stream_preview_audio(
                 )
 
     if not voice.preview_audio_path or not os.path.exists(voice.preview_audio_path):
+        default_preview = f"storage/clones/previews/{voice.voice_id}_preview.mp3"
+        if os.path.exists(default_preview) and os.path.getsize(default_preview) > 1000:
+            voice.preview_audio_path = default_preview
+            voice.preview_audio_url = f"/api/voices/cloned/{voice.voice_id}/preview"
+            await db.commit()
+            return FileResponse(
+                default_preview,
+                media_type="audio/mpeg",
+                filename=f"{voice.name}_preview.mp3",
+            )
         if voice.audio_sample_path and os.path.exists(voice.audio_sample_path):
             return FileResponse(
                 voice.audio_sample_path,

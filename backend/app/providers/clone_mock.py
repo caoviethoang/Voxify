@@ -119,10 +119,11 @@ class MockCloneProvider(CloneProvider):
                 volume=volume,
             )
         except Exception as exc:
-            # Nếu giọng nữ (HoaiMy) gặp lỗi trên server, tự động fallback sang giọng nam NamMinh ổn định hơn
-            if edge_voice != "vi-VN-NamMinhNeural" and "vi" in str(language).lower():
+            # Fallback 2 chiều giữa NamMinh và HoaiMy nếu một trong hai gặp sự cố
+            alt_voice = "vi-VN-HoaiMyNeural" if edge_voice == "vi-VN-NamMinhNeural" else "vi-VN-NamMinhNeural"
+            if "vi" in str(language).lower():
                 logger.warning(
-                    f"MockCloneProvider: {edge_voice} gặp lỗi ({exc}), tự động thử lại với vi-VN-NamMinhNeural."
+                    f"MockCloneProvider: {edge_voice} gặp lỗi ({exc}), tự động thử lại với {alt_voice}."
                 )
                 try:
                     from app.providers.edge import EdgeTTSProvider
@@ -130,13 +131,13 @@ class MockCloneProvider(CloneProvider):
                     edge_provider = EdgeTTSProvider()
                     return await edge_provider.synthesize(
                         text=text,
-                        voice="vi-VN-NamMinhNeural",
+                        voice=alt_voice,
                         rate=rate,
                         pitch=pitch,
                         volume=volume,
                     )
                 except Exception as inner_exc:
-                    logger.error(f"MockCloneProvider: Thử lại với NamMinh thất bại: {inner_exc}")
+                    logger.error(f"MockCloneProvider: Thử lại với {alt_voice} thất bại: {inner_exc}")
                     raise inner_exc from exc
 
             logger.error(f"MockCloneProvider: EdgeTTS không thể tổng hợp: {exc}")
