@@ -29,8 +29,6 @@ class AdminAuditLog(Base):
         index=True,
     )
 
-    admin: Mapped[Optional["User"]] = relationship("User", foreign_keys=[admin_id], lazy="select")
-
 
 class SystemVoiceSetting(Base):
     """Cấu hình ghi đè và điều phối giọng đọc trên toàn hệ thống."""
@@ -100,5 +98,3 @@ class AffiliateWithdrawal(Base):
         onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
-
-    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="select")

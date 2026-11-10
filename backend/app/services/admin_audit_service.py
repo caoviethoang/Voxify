@@ -4,6 +4,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from sqlalchemy import desc, select
+from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin import AdminAuditLog
@@ -61,8 +62,9 @@ class AdminAuditService:
     ) -> tuple[list[AdminAuditLog], int]:
         """Tra cứu danh sách Audit Log có phân trang và bộ lọc."""
         from sqlalchemy import func
+        from app.models.user import User
 
-        stmt = select(AdminAuditLog)
+        stmt = select(AdminAuditLog, User.email.label("admin_email")).outerjoin(User, AdminAuditLog.admin_id == User.id)
         count_stmt = select(func.count(AdminAuditLog.id))
 
         if action:
@@ -83,6 +85,10 @@ class AdminAuditService:
         offset = (page - 1) * limit
         stmt = stmt.order_by(desc(AdminAuditLog.created_at)).offset(offset).limit(limit)
         res = await db.execute(stmt)
-        items = list(res.scalars().all())
+        rows = res.all()
+        items: list[AdminAuditLog] = []
+        for log, email in rows:
+            setattr(log, "admin_email", email)
+            items.append(log)
 
         return items, total

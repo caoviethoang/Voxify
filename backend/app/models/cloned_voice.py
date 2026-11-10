@@ -87,7 +87,6 @@ class VoiceConsentLog(Base):
         nullable=False,
     )
 
-    user: Mapped["User"] = relationship("User")
     cloned_voice: Mapped[Optional["ClonedVoice"]] = relationship("ClonedVoice", back_populates="consent_logs")
 
 
@@ -117,4 +116,3 @@ class VoiceAbuseReport(Base):
     )
 
     cloned_voice: Mapped["ClonedVoice"] = relationship("ClonedVoice", back_populates="abuse_reports")
-    reporter_user: Mapped[Optional["User"]] = relationship("User")

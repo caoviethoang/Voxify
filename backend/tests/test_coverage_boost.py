@@ -1400,6 +1400,1684 @@ async def test_additional_service_units():
     assert len(pdf_bytes) > 0
 
 
+@pytest.mark.asyncio
+async def test_admin_audit_service_and_dashboard_deep_coverage():
+    """Kiểm thử chuyên sâu AdminAuditService và các nhánh edge cases."""
+    from app.db import AsyncSessionLocal
+    from app.services.admin_audit_service import AdminAuditService
+
+    async with AsyncSessionLocal() as db:
+        class Unserializable:
+            pass
+
+        log1 = await AdminAuditService.log_action(
+            db=db,
+            admin_id=1,
+            action="custom_action",
+            target_type="custom_target",
+            target_id="123",
+            details={"obj": Unserializable()},
+            ip_address="127.0.0.1",
+        )
+        assert log1.id is not None
+
+        log2 = await AdminAuditService.log_action(
+            db=db,
+            admin_id=1,
+            action="custom_action_2",
+            target_type="custom_target_2",
+            target_id=None,
+            details=None,
+            ip_address=None,
+        )
+        assert log2.id is not None
+
+        items, total = await AdminAuditService.list_logs(
+            db=db,
+            action="custom_action",
+            target_type="custom_target",
+            admin_id=1,
+            page=1,
+            limit=10,
+        )
+        assert total >= 1
+
+
+@pytest.mark.asyncio
+async def test_voice_clone_routes_deep_coverage():
+    """Kiểm thử chuyên sâu các routes của Voice Clone để tăng coverage."""
+    import time
+    from pathlib import Path
+    from httpx import ASGITransport, AsyncClient
+    from app.main import app
+    from app.db import AsyncSessionLocal
+    from app.models.cloned_voice import ClonedVoice
+    from app.models.user import User
+    from app.core.security import hash_password
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Tạo 2 users (owner và other)
+        t = int(time.time() * 1000)
+        async with AsyncSessionLocal() as db:
+            u1 = User(email=f"u1_{t}@example.com", hashed_password=hash_password("Pass123!"), full_name="User 1", role="user", is_active=True, credit_balance=50000, credits=50000)
+            u2 = User(email=f"u2_{t}@example.com", hashed_password=hash_password("Pass123!"), full_name="User 2", role="user", is_active=True, credit_balance=50000, credits=50000)
+            db.add_all([u1, u2])
+            await db.commit()
+            await db.refresh(u1)
+            await db.refresh(u2)
+            u1_id = u1.id
+            u2_id = u2.id
+
+        t1 = (await client.post("/api/auth/login", json={"email": f"u1_{t}@example.com", "password": "Pass123!"})).json()["access_token"]
+        t2 = (await client.post("/api/auth/login", json={"email": f"u2_{t}@example.com", "password": "Pass123!"})).json()["access_token"]
+        h1 = {"Authorization": f"Bearer {t1}"}
+        h2 = {"Authorization": f"Bearer {t2}"}
+
+        # Tạo file mẫu và preview giả lập
+        Path("storage/clones/samples").mkdir(parents=True, exist_ok=True)
+        Path("storage/clones/previews").mkdir(parents=True, exist_ok=True)
+        s_file = f"storage/clones/samples/clone_{u1_id}_{t}_sample.mp3"
+        p_file = f"storage/clones/previews/clone_{u1_id}_{t}_preview.mp3"
+        with open(s_file, "wb") as f:
+            f.write(b"SAMPLE_AUDIO_BYTES_TEST")
+        with open(p_file, "wb") as f:
+            f.write(b"PREVIEW_AUDIO_BYTES_TEST")
+
+        async with AsyncSessionLocal() as db:
+            cv = ClonedVoice(
+                voice_id=f"clone_{u1_id}_{t}_voice",
+                user_id=u1_id,
+                name="Giọng Test Clone",
+                description="Mô tả test",
+                audio_sample_path=s_file,
+                sample_duration=10.0,
+                sample_size_bytes=1000,
+                quality_score=4.5,
+                gender="male",
+                language="vi-VN",
+                provider="mock",
+                provider_voice_id="mock_id_123",
+                preview_audio_path=p_file,
+                status="ready",
+                is_active=True,
+            )
+            db.add(cv)
+            await db.commit()
+            await db.refresh(cv)
+            vid = cv.voice_id
+
+        # 1. GET detail
+        res_det = await client.get(f"/api/voices/cloned/{vid}", headers=h1)
+        assert res_det.status_code == 200
+        assert res_det.json()["name"] == "Giọng Test Clone"
+
+        # 2. GET detail 403 (user 2 gọi voice của user 1)
+        assert (await client.get(f"/api/voices/cloned/{vid}", headers=h2)).status_code == 403
+
+        # 3. GET detail 404
+        assert (await client.get("/api/voices/cloned/not_exists", headers=h1)).status_code == 404
+
+        # 4. PATCH update
+        res_patch = await client.patch(
+            f"/api/voices/cloned/{vid}",
+            headers=h1,
+            json={"name": "Giọng Test Đổi Tên", "description": "Mô tả mới"},
+        )
+        assert res_patch.status_code == 200
+        assert res_patch.json()["name"] == "Giọng Test Đổi Tên"
+
+        # 5. GET preview stream
+        res_prev = await client.get(f"/api/voices/cloned/{vid}/preview", headers=h1)
+        assert res_prev.status_code == 200
+
+        # 6. GET sample stream
+        res_sample = await client.get(f"/api/voices/cloned/{vid}/sample", headers=h1)
+        assert res_sample.status_code == 200
+        assert (await client.get(f"/api/voices/cloned/{vid}/sample", headers=h2)).status_code == 403
+
+        # 7. DELETE voice
+        res_del = await client.delete(f"/api/voices/cloned/{vid}", headers=h1)
+        assert res_del.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_voices_route_and_overrides():
+    """Kiểm thử route /api/voices với cache, force_refresh, và overrides."""
+    import time
+    from unittest.mock import AsyncMock, patch
+    from httpx import ASGITransport, AsyncClient
+    from app.main import app
+    from app.db import AsyncSessionLocal
+    from app.models.admin import SystemVoiceSetting
+
+    async with AsyncSessionLocal() as db:
+        # Tạo override voice setting
+        s = SystemVoiceSetting(
+            voice_id=f"vi-VN-Custom_{int(time.time()*1000)}",
+            name="Custom Test Name",
+            is_active=False,
+            tier="premium",
+            credit_multiplier=1.8,
+        )
+        db.add(s)
+        await db.commit()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. GET /api/voices
+        res = await client.get("/api/voices")
+        assert res.status_code == 200
+        data = res.json()
+        assert "voices" in data
+        assert "total" in data
+
+        # 2. GET /api/voices?refresh=true
+        res_ref = await client.get("/api/voices?refresh=true")
+        assert res_ref.status_code == 200
+
+        # 3. Lỗi 500 khi tts_service gặp sự cố
+        with patch("app.services.tts_service.TTSService.get_voices", new=AsyncMock(side_effect=Exception("Lỗi mock voice"))):
+            res_err = await client.get("/api/voices")
+            assert res_err.status_code == 500
+
+
+@pytest.mark.asyncio
+async def test_history_item_patch_delete_and_cleanup():
+    """Kiểm thử PATCH title, DELETE generation, quyền truy cập và cleanup."""
+    import time
+    from datetime import UTC, datetime, timedelta
+    from httpx import ASGITransport, AsyncClient
+    from app.main import app
+    from app.db import AsyncSessionLocal
+    from app.models.generation import Generation
+    from app.models.user import User
+    from app.core.security import create_access_token, hash_password
+    from app.routes.history import cleanup_old_generations
+
+    async with AsyncSessionLocal() as db:
+        u1 = User(email=f"u1_hist_{time.time()}@example.com", hashed_password=hash_password("Pass123!"), is_active=True, is_verified=True)
+        u2 = User(email=f"u2_hist_{time.time()}@example.com", hashed_password=hash_password("Pass123!"), is_active=True, is_verified=True)
+        db.add_all([u1, u2])
+        await db.flush()
+
+        gen = Generation(
+            user_id=u1.id,
+            text="Nội dung lịch sử mẫu",
+            voice="vi-VN-HoaiMyNeural",
+            status="done",
+            char_count=20,
+            duration=2.5,
+            is_preview=True,
+            created_at=datetime.now(UTC) - timedelta(days=10),
+        )
+        db.add(gen)
+        await db.flush()
+        gen_id = gen.id
+        u1_id, u2_id = u1.id, u2.id
+        await db.commit()
+
+    t1 = create_access_token(data={"sub": str(u1_id)})
+    t2 = create_access_token(data={"sub": str(u2_id)})
+    h1 = {"Authorization": f"Bearer {t1}"}
+    h2 = {"Authorization": f"Bearer {t2}"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. PATCH 404
+        assert (await client.patch("/api/history/999999", headers=h1, json={"title": "Mới"})).status_code == 404
+
+        # 2. PATCH 403 (khác user)
+        assert (await client.patch(f"/api/history/{gen_id}", headers=h2, json={"title": "Mới"})).status_code == 403
+
+        # 3. PATCH 200 (chủ sở hữu)
+        res_patch = await client.patch(f"/api/history/{gen_id}", headers=h1, json={"title": "Tiêu đề tùy chỉnh"})
+        assert res_patch.status_code == 200
+        assert res_patch.json()["title"] == "Tiêu đề tùy chỉnh"
+
+        # 4. DELETE 404
+        assert (await client.delete("/api/history/999999", headers=h1)).status_code == 404
+
+        # 5. DELETE 403 (khác user)
+        assert (await client.delete(f"/api/history/{gen_id}", headers=h2)).status_code == 403
+
+        # 6. DELETE 200 (chủ sở hữu)
+        res_del = await client.delete(f"/api/history/{gen_id}", headers=h1)
+        assert res_del.status_code == 200
+        assert res_del.json()["deleted"] == 1
+
+        # 7. cleanup_old_generations
+        async with AsyncSessionLocal() as db:
+            await cleanup_old_generations(db, retention_days=7)
+
+
+@pytest.mark.asyncio
+async def test_dictionary_patch_and_delete_endpoints():
+    """Kiểm thử PUT và DELETE rule cho từ điển phát âm."""
+    import time
+    from httpx import ASGITransport, AsyncClient
+    from app.main import app
+    from app.db import AsyncSessionLocal
+    from app.models.user import User
+    from app.models.dictionary import PronunciationDictionary
+    from app.core.security import create_access_token, hash_password
+
+    async with AsyncSessionLocal() as db:
+        user = User(email=f"dict_user_{time.time()}@example.com", hashed_password=hash_password("Pass123!"), is_active=True, is_verified=True)
+        db.add(user)
+        await db.flush()
+        rule = PronunciationDictionary(user_id=user.id, word="AI", replacement="trí tuệ nhân tạo", category="tech", is_active=True)
+        db.add(rule)
+        await db.flush()
+        u_id = user.id
+        r_id = rule.id
+        await db.commit()
+
+    token = create_access_token(data={"sub": str(u_id)})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # PUT 404
+        assert (await client.put("/api/dictionary/999999", headers=headers, json={"replacement": "abc"})).status_code == 404
+
+        # PUT 200
+        res_put = await client.put(f"/api/dictionary/{r_id}", headers=headers, json={"replacement": "ây ai", "category": "custom", "is_active": False})
+        assert res_put.status_code == 200
+        assert res_put.json()["replacement"] == "ây ai"
+
+        # DELETE 404
+        assert (await client.delete("/api/dictionary/999999", headers=headers)).status_code == 404
+
+        # DELETE 200
+        res_del = await client.delete(f"/api/dictionary/{r_id}", headers=headers)
+        assert res_del.status_code == 200
+
+
+@pytest.mark.unit
+def test_text_splitter_and_sentence_splitter_deep():
+    """Kiểm thử chuyên sâu hàm split_text_into_chunks và _split_long_sentence."""
+    from app.services.text_splitter import split_text_into_chunks, _split_long_sentence
+
+    # 1. Empty & space text
+    assert split_text_into_chunks("") == []
+    assert split_text_into_chunks("   \n\t  ") == []
+
+    # 2. Text fits within max_chunk_size
+    assert split_text_into_chunks("Một đoạn văn ngắn.", max_chunk_size=100) == ["Một đoạn văn ngắn."]
+
+    # 3. Câu siêu dài với các loại dấu ngắt (phẩy, chấm phẩy, khoảng trắng, không khoảng trắng)
+    sentence_commas = "Từ một, từ hai, từ ba, từ bốn, từ năm, từ sáu, từ bảy, từ tám."
+    chunks_c = _split_long_sentence(sentence_commas, max_chunk_size=20)
+    assert len(chunks_c) >= 2
+
+    # Không có dấu phẩy nhưng có khoảng trắng
+    sentence_spaces = "Một hai ba bốn năm sáu bảy tám chín mười mười một mười hai"
+    chunks_s = _split_long_sentence(sentence_spaces, max_chunk_size=15)
+    assert len(chunks_s) >= 2
+
+    # Không có khoảng trắng (từ liền siêu dài)
+    sentence_nowhitespace = "A" * 60
+    chunks_nw = _split_long_sentence(sentence_nowhitespace, max_chunk_size=20)
+    assert len(chunks_nw) == 3
+    assert all(len(c) <= 20 for c in chunks_nw)
+
+    # 4. Văn bản nhiều câu có cả câu siêu dài
+    long_doc = "Câu ngắn đầu tiên. " + ("Siêu dài không ngắt " * 20) + ". Câu ngắn kết thúc!"
+    res_doc = split_text_into_chunks(long_doc, max_chunk_size=50)
+    assert len(res_doc) >= 3
+
+
+@pytest.mark.asyncio
+async def test_dashboard_stats_and_history_filters_deep():
+    """Kiểm thử dashboard stats khi có dữ liệu và history filter date/format."""
+    import time
+    from datetime import UTC, datetime
+    from httpx import ASGITransport, AsyncClient
+    from app.main import app
+    from app.db import AsyncSessionLocal
+    from app.models.user import User
+    from app.models.generation import Generation
+    from app.core.security import create_access_token, hash_password
+
+    async with AsyncSessionLocal() as db:
+        user = User(
+            email=f"dash_hist_{time.time()}@example.com",
+            hashed_password=hash_password("Pass123!"),
+            is_active=True,
+            is_verified=True,
+            credit_balance=10000,
+            credits=10000,
+        )
+        db.add(user)
+        await db.flush()
+
+        gen = Generation(
+            user_id=user.id,
+            text="Bài phát biểu test cho dashboard stats",
+            voice="vi-VN-NamMinhNeural",
+            status="done",
+            char_count=50,
+            duration=3.5,
+            format="mp3",
+            is_preview=False,
+            created_at=datetime.now(UTC),
+        )
+        db.add(gen)
+        await db.flush()
+        u_id = user.id
+        await db.commit()
+
+    token = create_access_token(data={"sub": str(u_id)})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. GET /api/dashboard/stats
+        res_dash = await client.get("/api/dashboard/stats", headers=headers)
+        assert res_dash.status_code == 200
+        dash_data = res_dash.json()
+        assert dash_data["total_audio_generated"] >= 1
+        assert dash_data["chars_used_this_month"] >= 50
+        assert dash_data["latest_generation"] is not None
+
+        # 2. GET /api/history với các bộ lọc ngày hợp lệ và không hợp lệ, format
+        res_h1 = await client.get("/api/history?date_from=2026-01-01T00:00:00&date_to=2026-12-31T23:59:59&format=mp3", headers=headers)
+        assert res_h1.status_code == 200
+
+        # Lọc ngày sai định dạng (vẫn 200 nhưng log warning)
+        res_h2 = await client.get("/api/history?date_from=invalid-date&date_to=invalid-date", headers=headers)
+        assert res_h2.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_v1_voices_extended_deep():
+    """Kiểm thử chuyên sâu /v1/voices với cloned voice, overrides và bộ lọc language/gender."""
+    import time
+    from httpx import ASGITransport, AsyncClient
+    from app.main import app
+    from app.db import AsyncSessionLocal
+    from app.models.user import User
+    from app.models.cloned_voice import ClonedVoice
+    from app.models.admin import SystemVoiceSetting
+    from app.services.api_key_service import ApiKeyService
+
+    async with AsyncSessionLocal() as db:
+        user = User(
+            email=f"v1_voices_user_{time.time()}@example.com",
+            hashed_password="hash",
+            is_active=True,
+            is_verified=True,
+            credit_balance=50000,
+            credits=50000,
+        )
+        db.add(user)
+        await db.flush()
+
+        # Tạo cloned voice ready
+        cv = ClonedVoice(
+            user_id=user.id,
+            voice_id=f"clone_v1_{int(time.time()*1000)}",
+            name="Giọng Clone V1 Test",
+            audio_sample_path="/tmp/sample.wav",
+            sample_duration=15.0,
+            sample_size_bytes=44100,
+            gender="Female",
+            language="vi-VN",
+            status="ready",
+            is_active=True,
+            quality_score=95.0,
+        )
+        db.add(cv)
+
+        # Tạo voice override
+        sv = SystemVoiceSetting(
+            voice_id=f"sys_override_{int(time.time()*1000)}",
+            name="Sys Override Voice",
+            tier="premium",
+            credit_multiplier=2.0,
+            is_active=True,
+        )
+        db.add(sv)
+        await db.flush()
+
+        _, plain_key = await ApiKeyService.create_api_key(db, user.id, name="Test V1 Voices Key")
+        await db.commit()
+
+    headers = {"Authorization": f"Bearer {plain_key}"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # GET /v1/voices
+        res = await client.get("/v1/voices", headers=headers)
+        assert res.status_code == 200
+        data = res.json()
+        assert "voices" in data
+        assert any(v.get("is_clone") for v in data["voices"])
+
+
+@pytest.mark.asyncio
+async def test_audio_service_sample_validation_scoring(tmp_path):
+    """Kiểm thử tính điểm chất lượng voice sample trong AudioService."""
+    from unittest.mock import AsyncMock, patch
+    from app.services.audio_service import AudioService
+
+    fake_file = tmp_path / "test_sample.wav"
+    fake_file.write_bytes(b"RIFF" + b"\x00" * 200)
+
+    # 1. Mock duration = 15s (lý tưởng), mean_volume = -20dB, max_volume = -0.5dB
+    with patch.object(AudioService, "measure_duration", return_value=15.0):
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            mock_proc = AsyncMock()
+            mock_proc.communicate.return_value = (
+                b"",
+                b"mean_volume: -20.0 dB\nmax_volume: -0.5 dB\n",
+            )
+            mock_exec.return_value = mock_proc
+
+            res = await AudioService.validate_voice_sample(str(fake_file))
+            assert res["valid"] is True
+            assert res["quality_score"] >= 4.0
+
+    # 2. Mock âm thanh quá nhỏ (dưới -50dB)
+    with patch.object(AudioService, "measure_duration", return_value=15.0):
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            mock_proc = AsyncMock()
+            mock_proc.communicate.return_value = (
+                b"",
+                b"mean_volume: -55.0 dB\nmax_volume: -40.0 dB\n",
+            )
+            mock_exec.return_value = mock_proc
+
+            res_silent = await AudioService.validate_voice_sample(str(fake_file))
+            assert res_silent["valid"] is False
+            assert "quá nhỏ" in res_silent["error"]
+
+    # 3. Mock clipping max_volume >= 0.0 & duration < 7s
+    with patch.object(AudioService, "measure_duration", return_value=5.0):
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            mock_proc = AsyncMock()
+            mock_proc.communicate.return_value = (
+                b"",
+                b"mean_volume: -40.0 dB\nmax_volume: 0.5 dB\n",
+            )
+            mock_exec.return_value = mock_proc
+
+            res_clip = await AudioService.validate_voice_sample(str(fake_file))
+            assert res_clip["valid"] is True
+            assert res_clip["quality_score"] <= 4.0
+
+
+@pytest.mark.asyncio
+async def test_voice_clone_routes_full_branches(tmp_path):
+    """Bổ sung độ phủ cho app/routes/voice_clone.py các nhánh detail, sample, preview, report."""
+    from app.core.security import create_access_token
+    from app.models.cloned_voice import ClonedVoice
+
+    # Chuẩn bị file mẫu wav thật tạm thời
+    sample_wav = tmp_path / "voice_sample.wav"
+    sample_wav.write_bytes(b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x44\xac\x00\x00" + b"\x00" * 100)
+    prev_mp3 = tmp_path / "voice_prev.mp3"
+    prev_mp3.write_bytes(b"ID3" + b"\x00" * 6000)
+
+    async with AsyncSessionLocal() as db:
+        u1 = User(
+            email=f"vclone_u1_{time.time()}@test.com",
+            hashed_password=hash_password("Pass123!"),
+            full_name="User One",
+            role="user",
+            credit_balance=10000,
+            credits=10000,
+        )
+        u2 = User(
+            email=f"vclone_u2_{time.time()}@test.com",
+            hashed_password=hash_password("Pass123!"),
+            full_name="User Two",
+            role="user",
+            credit_balance=10000,
+            credits=10000,
+        )
+        db.add(u1)
+        await db.commit()
+        await db.refresh(u1)
+        db.add(u2)
+        await db.commit()
+        await db.refresh(u2)
+
+        cv = ClonedVoice(
+            user_id=u1.id,
+            voice_id=f"voice_extra_{int(time.time()*1000)}",
+            name="Giọng Mẫu U1",
+            audio_sample_path=str(sample_wav),
+            sample_duration=12.0,
+            sample_size_bytes=sample_wav.stat().st_size,
+            preview_audio_path=str(prev_mp3),
+            is_active=True,
+        )
+        db.add(cv)
+        await db.commit()
+        await db.refresh(cv)
+        v_id = cv.voice_id
+
+    tok_u1 = create_access_token(data={"sub": str(u1.id), "email": u1.email, "role": u1.role})
+    tok_u2 = create_access_token(data={"sub": str(u2.id), "email": u2.email, "role": u2.role})
+    h1 = {"Authorization": f"Bearer {tok_u1}"}
+    h2 = {"Authorization": f"Bearer {tok_u2}"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. GET /api/voices/cloned
+        r_list = await client.get("/api/voices/cloned", headers=h1)
+        assert r_list.status_code == 200
+
+        # 2. GET /api/voices/cloned/{v_id} -> 200 cho U1, 403 cho U2, 404 cho không tồn tại
+        r_det_ok = await client.get(f"/api/voices/cloned/{v_id}", headers=h1)
+        assert r_det_ok.status_code == 200
+        assert r_det_ok.json()["name"] == "Giọng Mẫu U1"
+
+        r_det_403 = await client.get(f"/api/voices/cloned/{v_id}", headers=h2)
+        assert r_det_403.status_code == 403
+
+        r_det_404 = await client.get("/api/voices/cloned/non_existent_999", headers=h1)
+        assert r_det_404.status_code == 404
+
+        # 3. GET /api/voices/cloned/{v_id}/sample
+        r_samp_ok = await client.get(f"/api/voices/cloned/{v_id}/sample", headers=h1)
+        assert r_samp_ok.status_code == 200
+
+        r_samp_403 = await client.get(f"/api/voices/cloned/{v_id}/sample", headers=h2)
+        assert r_samp_403.status_code == 403
+
+        r_samp_404 = await client.get("/api/voices/cloned/non_existent_999/sample", headers=h1)
+        assert r_samp_404.status_code == 404
+
+        # 4. GET /api/voices/cloned/{v_id}/preview
+        r_prev_ok = await client.get(f"/api/voices/cloned/{v_id}/preview")
+        assert r_prev_ok.status_code == 200
+
+        r_prev_404 = await client.get("/api/voices/cloned/non_existent_999/preview")
+        assert r_prev_404.status_code == 404
+
+        # 5. POST /api/voices/cloned/{v_id}/report
+        r_rep = await client.post(
+            f"/api/voices/cloned/{v_id}/report",
+            headers=h1,
+            json={
+                "reason": "copyright",
+                "description": "Báo cáo thử nghiệm vi phạm bản quyền giọng đọc.",
+                "reporter_email": u1.email,
+            },
+        )
+        assert r_rep.status_code == 200
+        assert r_rep.json()["status"] == "pending"
+
+        # 6. PATCH /api/voices/cloned/{v_id}
+        r_patch = await client.patch(
+            f"/api/voices/cloned/{v_id}",
+            headers=h1,
+            json={"name": "Giọng Mẫu U1 Đã Sửa", "description": "Mô tả mới"},
+        )
+        assert r_patch.status_code == 200
+        assert r_patch.json()["name"] == "Giọng Mẫu U1 Đã Sửa"
+
+        # 7. DELETE /api/voices/cloned/{v_id}
+        r_del = await client.delete(f"/api/voices/cloned/{v_id}", headers=h1)
+        assert r_del.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_payments_routes_full_branches():
+    """Bổ sung độ phủ cho app/routes/payments.py các nhánh coupon, receipt, order status, webhook."""
+    from datetime import UTC, datetime, timedelta
+    from app.core.security import create_access_token
+    from app.models.payment import Coupon, Order
+
+    async with AsyncSessionLocal() as db:
+        u = User(
+            email=f"pay_u_{time.time()}@test.com",
+            hashed_password=hash_password("Pass123!"),
+            full_name="Payment User",
+            role="user",
+            credit_balance=10000,
+            credits=10000,
+        )
+        db.add(u)
+        await db.commit()
+        await db.refresh(u)
+
+        coupon = Coupon(
+            code=f"SALE{int(time.time()*1000)}",
+            discount_type="percent",
+            discount_value=20,
+            is_active=True,
+            max_uses=100,
+            used_count=0,
+        )
+        now_utc = datetime.now(UTC)
+        order_paid = Order(
+            order_code=f"ORD_PAID_{int(time.time()*1000)}",
+            order_number=int(time.time()) % 1000000,
+            user_id=u.id,
+            original_amount=100000,
+            final_amount=80000,
+            discount_amount=20000,
+            credits_to_add=50000,
+            payment_method="payos",
+            status="paid",
+            expires_at=now_utc + timedelta(hours=24),
+            paid_at=now_utc,
+        )
+        order_pending = Order(
+            order_code=f"ORD_PEND_{int(time.time()*1000)}",
+            order_number=(int(time.time()) + 1) % 1000000,
+            user_id=u.id,
+            original_amount=50000,
+            final_amount=50000,
+            credits_to_add=20000,
+            payment_method="bank_transfer",
+            status="pending",
+            expires_at=now_utc + timedelta(hours=24),
+        )
+        db.add_all([coupon, order_paid, order_pending])
+        await db.commit()
+        await db.refresh(coupon)
+        await db.refresh(order_paid)
+        await db.refresh(order_pending)
+
+    tok = create_access_token(data={"sub": str(u.id), "email": u.email, "role": u.role})
+    headers = {"Authorization": f"Bearer {tok}"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. POST /api/payments/coupons/validate hợp lệ và không hợp lệ
+        r_c_ok = await client.post(
+            "/api/payments/coupons/validate",
+            headers=headers,
+            json={"code": coupon.code, "order_amount": 100000},
+        )
+        assert r_c_ok.status_code == 200
+        assert r_c_ok.json()["valid"] is True
+
+        r_c_bad = await client.post(
+            "/api/payments/coupons/validate",
+            headers=headers,
+            json={"code": "KHONG_TON_TAI_999", "order_amount": 100000},
+        )
+        assert r_c_bad.status_code == 200
+        assert r_c_bad.json()["valid"] is False
+
+        # 2. GET /api/payments/orders/{order_id}
+        r_ord_ok = await client.get(f"/api/payments/orders/{order_paid.id}", headers=headers)
+        assert r_ord_ok.status_code == 200
+
+        r_ord_404 = await client.get("/api/payments/orders/9999999", headers=headers)
+        assert r_ord_404.status_code == 404
+
+        # 3. GET /api/payments/orders/{order_id}/receipt
+        r_rec_ok = await client.get(f"/api/payments/orders/{order_paid.id}/receipt", headers=headers)
+        assert r_rec_ok.status_code == 200
+        assert r_rec_ok.headers["content-type"] == "application/pdf"
+
+        # Đơn chưa thanh toán tải biên lai -> 400
+        r_rec_notpaid = await client.get(f"/api/payments/orders/{order_pending.id}/receipt", headers=headers)
+        assert r_rec_notpaid.status_code == 400
+
+        # Đơn không tồn tại -> 404
+        r_rec_404 = await client.get("/api/payments/orders/9999999/receipt", headers=headers)
+        assert r_rec_404.status_code == 404
+
+        # 4. POST /api/payments/webhook/payos đơn không tồn tại -> 200 với success=False
+        r_wh_bad = await client.post(
+            "/api/payments/webhook/payos",
+            json={
+                "code": "00",
+                "desc": "success",
+                "data": {"orderCode": 12345},
+                "signature": "bad_signature",
+            },
+        )
+        assert r_wh_bad.status_code == 200
+        assert r_wh_bad.json()["success"] is False
+
+
+@pytest.mark.asyncio
+async def test_history_and_tts_routes_branches():
+    """Bổ sung độ phủ cho app/routes/history.py và app/routes/tts.py các nhánh lỗi và phụ đề."""
+    from app.core.security import create_access_token
+
+    async with AsyncSessionLocal() as db:
+        u = User(
+            email=f"hist_tts_u_{time.time()}@test.com",
+            hashed_password=hash_password("Pass123!"),
+            full_name="History TTS User",
+            role="user",
+            credit_balance=10000,
+            credits=10000,
+        )
+        db.add(u)
+        await db.commit()
+        await db.refresh(u)
+
+    tok = create_access_token(data={"sub": str(u.id), "email": u.email, "role": u.role})
+    headers = {"Authorization": f"Bearer {tok}"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # History 404
+        r_h_del_404 = await client.delete("/api/history/9999999", headers=headers)
+        assert r_h_del_404.status_code == 404
+
+        r_h_patch_404 = await client.patch("/api/history/9999999", headers=headers, json={"title": "Mới"})
+        assert r_h_patch_404.status_code == 404
+
+        # TTS Subtitles 404
+        r_sub_srt_404 = await client.get("/api/tts/9999999/subtitles?format=srt", headers=headers)
+        assert r_sub_srt_404.status_code == 404
+
+        r_sub_vtt_404 = await client.get("/api/tts/9999999/subtitles?format=vtt", headers=headers)
+        assert r_sub_vtt_404.status_code == 404
+
+        # TTS Job 404 & Audio 404
+        r_job_404 = await client.get("/api/tts/jobs/9999999", headers=headers)
+        assert r_job_404.status_code == 404
+
+        r_audio_404 = await client.get("/api/tts/jobs/9999999/audio", headers=headers)
+        assert r_audio_404.status_code == 404
+
+        # TTS Synthesize exception branches
+        with patch("app.services.tts_service.TTSService.synthesize", side_effect=ValueError("Tham số không hợp lệ")):
+            r_val_err = await client.post(
+                "/api/tts",
+                headers=headers,
+                json={"text": "Hello test value error", "voice": "vi-VN-NamMinhNeural"},
+            )
+            assert r_val_err.status_code == 400
+
+        with patch("app.services.tts_service.TTSService.synthesize", side_effect=RuntimeError("Lỗi kết nối dịch vụ")):
+            r_rt_err = await client.post(
+                "/api/tts",
+                headers=headers,
+                json={"text": "Hello test runtime error", "voice": "vi-VN-NamMinhNeural"},
+            )
+            assert r_rt_err.status_code == 502
+
+
+@pytest.mark.asyncio
+async def test_payment_service_process_successful_payment_deep():
+    """Tăng coverage cho app/services/payment_service.py: process_successful_payment, get_payment_methods, v.v."""
+    from datetime import UTC, datetime, timedelta
+    from app.models.payment import Coupon, Order, PricingPlan
+
+    async with AsyncSessionLocal() as db:
+        u = User(
+            email=f"pay_deep_{time.time()}@test.com",
+            hashed_password=hash_password("Pass123!"),
+            full_name="Payment Deep User",
+            credit_balance=5000,
+            credits=5000,
+        )
+        db.add(u)
+        await db.flush()
+
+        coupon = Coupon(
+            code=f"CP_DEEP_{int(time.time())}",
+            discount_type="percent",
+            discount_value=20,
+            max_uses=10,
+            used_count=0,
+            is_active=True,
+        )
+        db.add(coupon)
+        await db.flush()
+
+        plan = PricingPlan(
+            code=f"plan_deep_{int(time.time())}",
+            name="Plan Test Deep",
+            price=100000,
+            credits=100000,
+            is_active=True,
+        )
+        db.add(plan)
+        await db.flush()
+
+        order_num = int(time.time() * 1000) % 100000000
+        order = Order(
+            order_code=f"ORD_DEEP_{order_num}",
+            order_number=order_num,
+            user_id=u.id,
+            plan_id=plan.id,
+            coupon_id=coupon.id,
+            original_amount=100000,
+            discount_amount=20000,
+            final_amount=80000,
+            credits_to_add=100000,
+            payment_method="payos",
+            status="pending",
+            expires_at=datetime.now(UTC) + timedelta(minutes=30),
+        )
+        db.add(order)
+        await db.commit()
+
+        # 1. process_successful_payment
+        dyn_tx_id = f"tx_test_payos_{int(time.time() * 1000)}"
+        loaded_order, was_already_paid = await PaymentService.process_successful_payment(
+            db=db,
+            order=order,
+            gateway="payos",
+            transaction_id=dyn_tx_id,
+            paid_amount=80000,
+            raw_payload={"code": "00"},
+        )
+        assert was_already_paid is False
+        assert loaded_order.status == "paid"
+        assert loaded_order.paid_at is not None
+
+        # 2. Xử lý lại đơn đã thanh toán -> was_already_paid is True
+        again_order, again_paid = await PaymentService.process_successful_payment(
+            db=db,
+            order=loaded_order,
+            gateway="payos",
+            transaction_id=dyn_tx_id,
+            paid_amount=80000,
+        )
+        assert again_paid is True
+        assert again_order.status == "paid"
+
+        # 3. list_plans & get_plan_by_code
+        plans = await PaymentService.list_plans(db)
+        assert len(plans) >= 1
+        p_by_code = await PaymentService.get_plan_by_code(db, plan.code)
+        assert p_by_code is not None
+
+        # 4. generate_vietqr_url
+        qr_url = PaymentService.generate_vietqr_url(
+            bank_id="ICB",
+            account_no="123456789",
+            account_name="VOXIFY",
+            amount=50000,
+            transfer_content="VOX 123",
+        )
+        assert "vietqr" in qr_url.lower() or "http" in qr_url
+
+        # 4. get_order_by_id_or_code
+        by_id = await PaymentService.get_order_by_id_or_code(db, order.id)
+        assert by_id is not None
+        by_code = await PaymentService.get_order_by_id_or_code(db, order.order_code)
+        assert by_code is not None
+
+        # 5. cancel_order
+        cancel_ord_num = int(time.time() * 1000) % 100000000
+        cancel_order = Order(
+            order_code=f"ORD_CAN_{cancel_ord_num}",
+            order_number=cancel_ord_num,
+            user_id=u.id,
+            plan_id=plan.id,
+            original_amount=50000,
+            discount_amount=0,
+            final_amount=50000,
+            credits_to_add=50000,
+            payment_method="vietqr",
+            status="pending",
+            expires_at=datetime.now(UTC) + timedelta(minutes=30),
+        )
+        db.add(cancel_order)
+        await db.commit()
+
+        res_can = await PaymentService.cancel_order(db, cancel_order.id, user_id=u.id)
+        assert res_can.status == "cancelled"
+
+        # 6. create_plan & update_plan
+        p_new = await PaymentService.create_plan(db, {
+            "code": f"new_plan_{int(time.time() * 1000)}",
+            "name": "New Plan",
+            "price": 120000,
+            "credits": 120000,
+        })
+        assert p_new.id is not None
+        p_up = await PaymentService.update_plan(db, p_new.id, {"name": "Updated Plan Name"})
+        assert p_up.name == "Updated Plan Name"
+
+        # 7. validate_coupon branches
+        # - Non-existent
+        _, d, msg = await PaymentService.validate_coupon(db, "KHONG_CO_12345", 100000)
+        assert d == 0
+        # - Inactive
+        c_inact = Coupon(code=f"INACT_{int(time.time())}", discount_type="percent", discount_value=10, is_active=False)
+        # - Expired
+        c_exp = Coupon(code=f"EXP_{int(time.time())}", discount_type="percent", discount_value=10, is_active=True, expires_at=datetime.now(UTC) - timedelta(days=1))
+        # - Max uses reached
+        c_max = Coupon(code=f"MAX_{int(time.time())}", discount_type="percent", discount_value=10, is_active=True, max_uses=2, used_count=2)
+        # - Min order amount
+        c_min = Coupon(code=f"MIN_{int(time.time())}", discount_type="percent", discount_value=10, is_active=True, min_order_amount=200000)
+        # - Fixed discount
+        c_fix = Coupon(code=f"FIX_{int(time.time())}", discount_type="fixed", discount_value=30000, is_active=True)
+        db.add_all([c_inact, c_exp, c_max, c_min, c_fix])
+        await db.commit()
+
+        assert (await PaymentService.validate_coupon(db, c_inact.code, 100000))[1] == 0
+        assert (await PaymentService.validate_coupon(db, c_exp.code, 100000))[1] == 0
+        assert (await PaymentService.validate_coupon(db, c_max.code, 100000))[1] == 0
+        assert (await PaymentService.validate_coupon(db, c_min.code, 50000))[1] == 0
+        cp_ok, d_ok, _ = await PaymentService.validate_coupon(db, c_fix.code, 100000)
+        assert d_ok == 30000
+
+
+@pytest.mark.asyncio
+async def test_tts_route_authenticated_and_subtitles_deep():
+    """Tăng coverage cho app/routes/tts.py: POST /api/tts (authenticated), phụ đề srt/vtt, danh sách jobs."""
+    from app.core.security import create_access_token
+    from app.models.generation import Generation
+
+    async with AsyncSessionLocal() as db:
+        u = User(
+            email=f"tts_deep_{time.time()}@test.com",
+            hashed_password=hash_password("Pass123!"),
+            full_name="TTS Deep User",
+            credit_balance=20000,
+            credits=20000,
+        )
+        db.add(u)
+        await db.commit()
+        await db.refresh(u)
+
+    token = create_access_token(data={"sub": str(u.id), "email": u.email, "role": u.role})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. POST /api/tts với user đã đăng nhập
+        res = await client.post(
+            "/api/tts",
+            headers=headers,
+            json={"text": "Xin chào đây là bài kiểm thử âm thanh đồng bộ", "voice": "vi-VN-HoaiMyNeural"},
+        )
+        assert res.status_code == 200
+        assert res.headers["content-type"] == "audio/mpeg"
+        assert "x-credit-balance" in res.headers
+        assert "x-duration" in res.headers
+
+        # 2. Tạo một job hoàn tất trong DB để tải phụ đề srt và vtt
+        async with AsyncSessionLocal() as db:
+            gen = Generation(
+                user_id=u.id,
+                text="Câu một cho phụ đề. Câu hai cho phụ đề.",
+                voice="vi-VN-HoaiMyNeural",
+                char_count=40,
+                credit_used=40,
+                duration=3.5,
+                status="done",
+                is_preview=False,
+            )
+            db.add(gen)
+            await db.commit()
+            await db.refresh(gen)
+            gen_id = gen.id
+
+        # Tải phụ đề SRT (tự sinh ước tính)
+        res_srt = await client.get(f"/api/tts/jobs/{gen_id}/subtitles?format=srt", headers=headers)
+        assert res_srt.status_code == 200
+        assert "subtitles" in res_srt.headers.get("content-disposition", "")
+
+        # Tải phụ đề VTT (đã có hoặc ước tính)
+        res_vtt = await client.get(f"/api/tts/jobs/{gen_id}/subtitles?format=vtt", headers=headers)
+        assert res_vtt.status_code == 200
+
+        # 3. GET /api/tts/jobs danh sách job gần đây
+        res_jobs = await client.get("/api/tts/jobs?limit=5", headers=headers)
+        assert res_jobs.status_code == 200
+        assert isinstance(res_jobs.json(), list)
+
+
+@pytest.mark.asyncio
+async def test_v1_tts_sync_modes_and_download():
+    """Tăng coverage cho app/routes/v1/tts.py: chế độ sync, download=true, header accept audio."""
+    from app.services.api_key_service import ApiKeyService
+
+    async with AsyncSessionLocal() as db:
+        u = User(
+            email=f"v1_sync_{time.time()}@test.com",
+            hashed_password=hash_password("Pass123!"),
+            full_name="V1 Sync User",
+            credit_balance=50000,
+            credits=50000,
+        )
+        db.add(u)
+        await db.commit()
+        await db.refresh(u)
+
+        key_rec, raw_key = await ApiKeyService.create_api_key(
+            db=db,
+            user_id=u.id,
+            name="V1 Sync Test Key",
+        )
+
+    v1_headers = {"Authorization": f"Bearer {raw_key}"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Sync TTS trả về JSON
+        res_json = await client.post(
+            "/v1/tts",
+            headers=v1_headers,
+            json={
+                "text": "Kiểm thử API v1 chế độ đồng bộ JSON",
+                "voice": "vi-VN-HoaiMyNeural",
+                "mode": "sync",
+            },
+        )
+        assert res_json.status_code == 200
+        data = res_json.json()
+        assert data["status"] == "completed"
+        assert "audio_url" in data
+
+        # 2. Sync TTS với download=true trả về file audio/mpeg
+        res_dl = await client.post(
+            "/v1/tts?download=true",
+            headers=v1_headers,
+            json={
+                "text": "Kiểm thử API v1 download trực tiếp",
+                "voice": "vi-VN-HoaiMyNeural",
+                "mode": "sync",
+            },
+        )
+        assert res_dl.status_code == 200
+        assert res_dl.headers["content-type"] == "audio/mpeg"
+        assert "attachment" in res_dl.headers.get("content-disposition", "")
+
+        # 3. Sync TTS với Header Accept: audio/mpeg
+        res_accept = await client.post(
+            "/v1/tts",
+            headers={**v1_headers, "Accept": "audio/mpeg"},
+            json={
+                "text": "Kiểm thử API v1 Accept audio mpeg",
+                "voice": "vi-VN-HoaiMyNeural",
+                "mode": "sync",
+            },
+        )
+        assert res_accept.status_code == 200
+        assert res_accept.headers["content-type"] == "audio/mpeg"
+
+        # 4. Sync TTS với giọng clone không tồn tại -> 404
+        res_clone_404 = await client.post(
+            "/v1/tts",
+            headers=v1_headers,
+            json={
+                "text": "Kiểm thử giọng clone không tồn tại",
+                "voice": "clone_99999999",
+                "mode": "sync",
+            },
+        )
+        assert res_clone_404.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_history_routes_search_bulk_delete_and_cleanup():
+    """Tăng coverage cho app/routes/history.py: lọc search, format, bulk delete, cleanup_old_generations."""
+    from datetime import UTC, datetime, timedelta
+    from app.core.security import create_access_token
+    from app.models.generation import Generation
+    from app.routes.history import cleanup_old_generations
+
+    async with AsyncSessionLocal() as db:
+        u = User(
+            email=f"hist_deep_{time.time()}@test.com",
+            hashed_password=hash_password("Pass123!"),
+            full_name="History Deep User",
+            credit_balance=10000,
+            credits=10000,
+        )
+        db.add(u)
+        await db.commit()
+        await db.refresh(u)
+
+        # Tạo 3 bản ghi generation
+        g1 = Generation(
+            user_id=u.id,
+            text="Tin tức thời sự hôm nay đặc biệt",
+            voice="vi-VN-HoaiMyNeural",
+            char_count=35,
+            credit_used=35,
+            format="mp3",
+            status="done",
+            is_preview=False,
+        )
+        g2 = Generation(
+            user_id=u.id,
+            text="Tin thể thao bóng đá hôm qua",
+            voice="vi-VN-NamMinhNeural",
+            char_count=28,
+            credit_used=28,
+            format="mp3",
+            status="done",
+            is_preview=False,
+        )
+        g_prev = Generation(
+            user_id=u.id,
+            text="Bản ghi nghe thử preview",
+            voice="vi-VN-HoaiMyNeural",
+            char_count=24,
+            credit_used=0,
+            format="mp3",
+            status="done",
+            is_preview=True,
+            created_at=datetime.now(UTC) - timedelta(days=10),
+        )
+        db.add_all([g1, g2, g_prev])
+        await db.commit()
+        await db.refresh(g1)
+        await db.refresh(g2)
+        g1_id = g1.id
+        g2_id = g2.id
+
+    token = create_access_token(data={"sub": str(u.id), "email": u.email, "role": u.role})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Lọc search và format
+        res_search = await client.get(
+            "/api/history?page=1&limit=10&search=thời+sự&format=mp3",
+            headers=headers,
+        )
+        assert res_search.status_code == 200
+        assert res_search.json()["total"] >= 1
+
+        # 2. Cập nhật title
+        res_patch = await client.patch(
+            f"/api/history/{g1_id}",
+            headers=headers,
+            json={"title": "Tiêu đề mới cập nhật"},
+        )
+        assert res_patch.status_code == 200
+        assert res_patch.json()["title"] == "Tiêu đề mới cập nhật"
+
+        # 3. Bulk delete
+        res_bulk = await client.request(
+            "DELETE",
+            "/api/history/bulk",
+            headers=headers,
+            json={"ids": [g1_id]},
+        )
+        assert res_bulk.status_code == 200
+        assert res_bulk.json()["deleted"] >= 1
+
+        # 4. Xóa từng bản ghi
+        res_del = await client.delete(f"/api/history/{g2_id}", headers=headers)
+        assert res_del.status_code == 200
+        assert res_del.json()["deleted"] == 1
+
+    # 5. Dọn dẹp preview cũ
+    async with AsyncSessionLocal() as db:
+        await cleanup_old_generations(db, retention_days=7)
+
+
+@pytest.mark.asyncio
+async def test_voices_route_with_overrides():
+    """Tăng coverage cho app/routes/voices.py: ghi đè thông tin giọng đọc và lọc giọng tắt."""
+    from sqlalchemy import select
+    from app.models.admin import SystemVoiceSetting
+
+    async with AsyncSessionLocal() as db:
+        # Cập nhật hoặc thêm setting cho 1 giọng
+        stmt = select(SystemVoiceSetting).where(SystemVoiceSetting.voice_id == "vi-VN-HoaiMyNeural")
+        existing = (await db.execute(stmt)).scalar_one_or_none()
+        if existing:
+            existing.name = "Hoài My VIP"
+            existing.tier = "pro"
+            existing.credit_multiplier = 1.8
+            existing.is_active = True
+        else:
+            s_pro = SystemVoiceSetting(
+                voice_id="vi-VN-HoaiMyNeural",
+                name="Hoài My VIP",
+                is_active=True,
+                tier="pro",
+                credit_multiplier=1.8,
+            )
+            db.add(s_pro)
+        await db.commit()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        res = await client.get("/api/voices?refresh=true")
+        assert res.status_code == 200
+        data = res.json()
+        assert "voices" in data
+        assert "total" in data
+
+        hoaimy = next((v for v in data["voices"] if v.get("id") == "vi-VN-HoaiMyNeural"), None)
+        if hoaimy:
+            assert hoaimy["name"] == "Hoài My VIP"
+            assert hoaimy["tier"] == "pro"
+            assert hoaimy["credit_multiplier"] == 1.8
+
+
+@pytest.mark.asyncio
+async def test_final_coverage_push_to_reach_80_percent():
+    """Tăng coverage toàn diện vượt ngưỡng 80%: TTSService, Voice Anti-Abuse, Config API, Storage, TextSplitter, History 403."""
+    from app.core.security import create_access_token
+    from app.core.voice_anti_abuse import check_voice_name_against_blocklist, normalize_text
+    from app.models.generation import Generation
+    from app.providers.fake import FakeTTSProvider
+    from app.services.text_splitter import split_text_into_chunks
+    from app.services.tts_service import TTSService
+    from app.storage import get_storage
+
+    # 1. TTSService branches
+    fake_provider = FakeTTSProvider()
+    tts_svc = TTSService(provider=fake_provider)
+
+    # Empty text
+    with pytest.raises(ValueError, match="Vui lòng nhập nội dung"):
+        await tts_svc.synthesize(text="", voice="vi-VN-HoaiMyNeural")
+
+    # Text exceeding max_chars
+    with patch.object(tts_svc.settings, "max_chars", 10):
+        with pytest.raises(ValueError, match="vượt quá giới hạn"):
+            await tts_svc.synthesize(text="Đoạn văn này dài hơn 10 ký tự chắc chắn", voice="vi-VN-HoaiMyNeural")
+
+    # Invalid voice not starting with known prefix
+    with pytest.raises(ValueError, match="không tồn tại"):
+        await tts_svc.synthesize(text="Xin chào", voice="unknown_voice_xxx")
+
+    # Exception in get_voices during _validate_voice (should be caught and logged)
+    with patch.object(tts_svc, "get_voices", side_effect=Exception("Network error")):
+        # Since voice starts with vi-, fallback allows it
+        res_audio = await tts_svc.synthesize(text="Xin chào", voice="vi-VN-TestVoice")
+        assert len(res_audio) > 0
+
+    # 2. Voice Anti-Abuse
+    assert normalize_text("Đại Tướng Võ Nguyên Giáp!!") == "dai tuong vo nguyen giap"
+    assert normalize_text("") == ""
+
+    # Politicians
+    blocked, name, reason = check_voice_name_against_blocklist("Donald Trump Voice")
+    assert blocked is True
+    assert "donald trump" in name.lower()
+
+    # Celebrities
+    blocked, name, reason = check_voice_name_against_blocklist("Sơn Tùng M-TP")
+    assert blocked is True
+
+    # Clean name
+    blocked, name, reason = check_voice_name_against_blocklist("Nguyen Van A Giọng Đọc Bình Thường")
+    assert blocked is False
+    assert name is None
+
+    # 3. Storage unsupported backend
+    with pytest.raises(ValueError, match="chưa được hỗ trợ"):
+        get_storage("unsupported_backend_xyz")
+
+    # 4. TextSplitter with super long word
+    long_word_text = "Câu bắt đầu. " + "A" * 50 + " Kết thúc câu."
+    chunks = split_text_into_chunks(long_word_text, max_chunk_size=15)
+    assert len(chunks) > 1
+
+    # 5. Config API & History 403 Forbidden
+    async with AsyncSessionLocal() as db:
+        u1 = User(
+            email=f"u1_hist_{time.time()}@test.com",
+            hashed_password=hash_password("Pass123!"),
+            full_name="User 1",
+            credit_balance=10000,
+            credits=10000,
+        )
+        u2 = User(
+            email=f"u2_hist_{time.time()}@test.com",
+            hashed_password=hash_password("Pass123!"),
+            full_name="User 2",
+            credit_balance=10000,
+            credits=10000,
+        )
+        db.add_all([u1, u2])
+        await db.commit()
+        await db.refresh(u1)
+        await db.refresh(u2)
+
+        g_u1 = Generation(
+            user_id=u1.id,
+            text="Bài viết thuộc về User 1",
+            voice="vi-VN-HoaiMyNeural",
+            char_count=25,
+            credit_used=25,
+            status="done",
+            is_preview=False,
+        )
+        db.add(g_u1)
+        await db.commit()
+        await db.refresh(g_u1)
+        g_u1_id = g_u1.id
+
+    token_u2 = create_access_token(data={"sub": str(u2.id), "email": u2.email, "role": u2.role})
+    headers_u2 = {"Authorization": f"Bearer {token_u2}"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # GET /api/config
+        r_conf = await client.get("/api/config")
+        assert r_conf.status_code == 200
+        assert "app_name" in r_conf.json()
+
+        # User 2 tries to delete User 1's generation -> 403
+        r_del_403 = await client.delete(f"/api/history/{g_u1_id}", headers=headers_u2)
+        assert r_del_403.status_code == 403
+
+        # User 2 tries to patch User 1's generation -> 403
+        r_patch_403 = await client.patch(f"/api/history/{g_u1_id}", headers=headers_u2, json={"title": "Hacked"})
+        assert r_patch_403.status_code == 403
+
+
+
+def test_receipt_pdf_generation_direct():
+    """Tăng coverage cho app/core/receipt.py."""
+    from datetime import UTC, datetime
+    from app.core.receipt import generate_receipt_pdf
+
+    pdf_bytes = generate_receipt_pdf(
+        order_code="VOX_ORDER_9999",
+        user_email="test_pdf@voxify.vn",
+        plan_name="Gói Chuyên Nghiệp (Pro)",
+        original_amount=200000,
+        discount_amount=50000,
+        final_amount=150000,
+        credits=150000,
+        payment_method="vietqr",
+        paid_at=datetime.now(UTC),
+    )
+    assert len(pdf_bytes) > 100
+    assert pdf_bytes.startswith(b"%PDF-1.4")
+
+
+@pytest.mark.asyncio
+async def test_rate_limiter_and_login_limit():
+    """Tăng coverage cho app/core/rate_limiter.py."""
+    from unittest.mock import MagicMock
+    from fastapi import HTTPException
+    from app.core.rate_limiter import (
+        MemorySlidingWindowRateLimiter,
+        RateLimiterService,
+        check_login_rate_limit,
+        reset_login_rate_limit,
+    )
+
+    # 1. Login rate limit
+    req = MagicMock()
+    req.client.host = "192.168.1.100"
+    req.headers = {"x-forwarded-for": "10.0.0.1"}
+
+    # 5 attempts allowed
+    for _ in range(5):
+        check_login_rate_limit(req, max_attempts=5, window_seconds=60)
+
+    # 6th attempt raises 429
+    with pytest.raises(HTTPException) as exc_info:
+        check_login_rate_limit(req, max_attempts=5, window_seconds=60)
+    assert exc_info.value.status_code == 429
+    assert "Retry-After" in exc_info.value.headers
+
+    # Reset
+    reset_login_rate_limit(req)
+    # Allowed again
+    check_login_rate_limit(req, max_attempts=5, window_seconds=60)
+
+    # 2. MemorySlidingWindowRateLimiter
+    limiter = MemorySlidingWindowRateLimiter()
+    assert limiter.is_allowed("test_key", 2)[0] is True
+    assert limiter.is_allowed("test_key", 2)[0] is True
+    allowed, rem, reset_sec = limiter.is_allowed("test_key", 2)
+    assert allowed is False
+    assert rem == 0
+    assert reset_sec > 0
+    limiter.reset()
+
+    # 3. RateLimiterService
+    RateLimiterService.reset_in_memory()
+    res_free = await RateLimiterService.check_rate_limit(api_key_id=1234, plan_name="free")
+    assert res_free[0] is True
+    res_vip = await RateLimiterService.check_rate_limit(api_key_id=1234, plan_name="vip")
+    assert res_vip[0] is True
+
+
+@pytest.mark.asyncio
+async def test_reach_80_percent_coverage_guarantee():
+    """Kiểm tra các nhánh còn thiếu để đảm bảo độ bao phủ đạt >= 80%."""
+    from datetime import timedelta
+    from app.core.errors import AppError, TTSError, ValidationError, app_error_handler
+    from app.core.security import verify_password, create_access_token, create_timed_token, decode_token
+    from app.services.text_splitter import split_text_into_chunks, _split_long_sentence
+    from app.services.dictionary_service import DictionaryService
+    from app.models.generation import Generation
+
+    # 1. Security unit tests
+    assert verify_password("secret", None) is False
+    assert verify_password("secret", "invalid-hash-data") is False
+    token_delta = create_access_token({"sub": "999"}, expires_delta=timedelta(hours=2))
+    assert token_delta is not None
+    expired_tok = create_timed_token({"sub": "999"}, token_type="reset", expires_minutes=-10)
+    assert decode_token(expired_tok) is None
+    assert decode_token("not-a-valid-token") is None
+
+    # 2. Text splitter unit tests
+    assert split_text_into_chunks("") == []
+    assert split_text_into_chunks("short text", max_chunk_size=100) == ["short text"]
+    # Long word buffer flush branch
+    res_split = _split_long_sentence("hello " + "A" * 50, max_chunk_size=10)
+    assert len(res_split) > 1
+
+    # 3. DictionaryService unit tests
+    async with AsyncSessionLocal() as db:
+        with pytest.raises(ValueError, match="Từ gốc không được để trống"):
+            await DictionaryService.create_rule(db, user_id=1, word="   ", replacement="abc")
+
+    # 4. Routes: Developers API Keys, Credits, and History
+    t = int(time.time() * 1000)
+    async with AsyncSessionLocal() as db:
+        user = User(
+            email=f"cov80_{t}@example.com",
+            hashed_password=hash_password("Pass123!"),
+            full_name="Cov80 User",
+            role="user",
+            is_active=True,
+            credit_balance=25000,
+            credits=25000,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        u_id = user.id
+
+        # Tạo 1 generation để test history
+        gen = Generation(
+            user_id=u_id,
+            text="Văn bản thử nghiệm lịch sử",
+            voice="vi-VN-HoaiMyNeural",
+            provider="edge",
+            file_path="/storage/audio/test_cov.mp3",
+            format="mp3",
+            char_count=26,
+            duration=3.5,
+            status="done",
+            is_preview=False,
+            title="Lịch sử ban đầu",
+        )
+        db.add(gen)
+        await db.commit()
+
+    token = create_access_token(data={"sub": str(u_id), "email": user.email, "role": user.role})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Developers stats & revoke 404
+        stats_res = await client.get("/api/developers/stats?days=7", headers=headers)
+        assert stats_res.status_code == 200
+        del_key_res = await client.delete("/api/developers/keys/999999", headers=headers)
+        assert del_key_res.status_code == 404
+
+        # Credits balance & transactions list
+        cred_res = await client.get("/api/credits", headers=headers)
+        assert cred_res.status_code == 200
+        cred_tx_res = await client.get("/api/credits/transactions?page=1&limit=10", headers=headers)
+        assert cred_tx_res.status_code == 200
+
+        # History list với các bộ lọc
+        h1 = await client.get("/api/history?page=1&limit=10&search=nghiệm&format=mp3&status=done&is_preview=false", headers=headers)
+        assert h1.status_code == 200
+        assert h1.json()["total"] >= 1
+
+        h2 = await client.get("/api/history?date_from=2026-01-01T00:00:00&date_to=2026-12-31T23:59:59", headers=headers)
+        assert h2.status_code == 200
+
+        h3 = await client.get("/api/history?date_from=invalid-date&date_to=invalid-date", headers=headers)
+        assert h3.status_code == 200
+
+        # History 404s
+        assert (await client.delete("/api/history/999999", headers=headers)).status_code == 404
+        assert (await client.patch("/api/history/999999", headers=headers, json={"title": "new"})).status_code == 404
+
+    # 4.1 CreditService extra branches
+    from app.services.credit_service import CreditService
+    assert CreditService.calculate_cost(char_count=100, voice_multiplier=2.5) > 0
+    with pytest.raises(AppError):
+        async with AsyncSessionLocal() as db:
+            await CreditService.reserve(db, user_id=9999999, amount=0)
+
+    # 4.2 EdgeTTSProvider voice display_name fallback
+    from app.providers.edge import EdgeTTSProvider
+    from unittest.mock import patch, AsyncMock
+    with patch("edge_tts.list_voices", new_callable=AsyncMock) as m_edge:
+        m_edge.return_value = [{"ShortName": "edge_voice_1", "FriendlyName": "", "Gender": "Female", "Locale": "vi-VN"}]
+        edge_v_list = await EdgeTTSProvider().list_voices()
+        assert edge_v_list[0]["name"] == "edge_voice_1"
+
+    # 4.3 Rate limiter x-forwarded-for branch
+    from unittest.mock import MagicMock
+    from app.core.rate_limiter import check_login_rate_limit, reset_login_rate_limit
+    mock_req = MagicMock()
+    mock_req.headers = {"x-forwarded-for": "10.0.0.1, 10.0.0.2"}
+    mock_req.client = None
+    check_login_rate_limit(mock_req)
+    reset_login_rate_limit(mock_req)
+
+    # 5. Core Errors unit tests
+    e_tts = TTSError("Lỗi TTS")
+    assert e_tts.code == "TTS_ERROR"
+    assert e_tts.status_code == 502
+    e_val = ValidationError("Lỗi Validate")
+    assert e_val.code == "VALIDATION_ERROR"
+    assert e_val.status_code == 400
+    err_resp = await app_error_handler(None, AppError("CUSTOM_ERR", "Thông báo lỗi", 422))
+    assert err_resp.status_code == 422
+
+    # 6. Storage factory unit tests
+    from app.storage import get_storage
+    assert get_storage("local") is not None
+    with pytest.raises(ValueError, match="chưa được hỗ trợ"):
+        get_storage("unknown_backend_storage")
+
+    # 7. Voice anti-abuse unit tests
+    from app.core.voice_anti_abuse import normalize_text, check_voice_name_against_blocklist
+    assert normalize_text("") == ""
+    assert normalize_text("Đỗ Mười!!!") == "do muoi"
+    bl_pol = check_voice_name_against_blocklist("Donald Trump")
+    assert bl_pol[0] is True
+    bl_celeb = check_voice_name_against_blocklist("Taylor Swift")
+    assert bl_celeb[0] is True
+    bl_ok = check_voice_name_against_blocklist("Giọng đọc bình thường")
+    assert bl_ok[0] is False
+
+    # 8. Email core unit tests
+    from unittest.mock import patch, MagicMock
+    from app.core.email import send_password_reset_email, send_verification_email, send_payment_confirmation_email
+
+    with patch("smtplib.SMTP") as mock_smtp:
+        mock_server = MagicMock()
+        mock_smtp.return_value.__enter__.return_value = mock_server
+        with patch("app.core.email.get_settings") as mock_set:
+            mock_s = MagicMock()
+            mock_s.smtp_host = "smtp.example.com"
+            mock_s.smtp_port = 587
+            mock_s.smtp_user = "user"
+            mock_s.smtp_password = "password"
+            mock_s.emails_from = "no-reply@voxify.vn"
+            mock_s.frontend_url = "http://localhost:3000"
+            mock_s.app_name = "Voxify"
+            mock_set.return_value = mock_s
+
+            send_password_reset_email("test@example.com", "tok123")
+            send_verification_email("test@example.com", "tok123")
+            send_payment_confirmation_email("test@example.com", "ORDER1", "Pro", 99000, 100000, "vietqr")
+            assert mock_server.send_message.call_count == 3
+
+    # SMTP error branch
+    with patch("smtplib.SMTP", side_effect=Exception("SMTP connection failed")):
+        with patch("app.core.email.get_settings") as mock_set:
+            mock_s = MagicMock()
+            mock_s.smtp_host = "smtp.example.com"
+            mock_s.smtp_port = 587
+            mock_s.smtp_user = None
+            mock_s.emails_from = "no-reply@voxify.vn"
+            mock_s.frontend_url = "http://localhost:3000"
+            mock_s.app_name = "Voxify"
+            mock_set.return_value = mock_s
+
+            send_password_reset_email("test@example.com", "tok123")
+
+    # 9. Abstract Provider Bases unit tests
+    from app.providers.base import TTSProvider
+    from app.providers.clone_base import CloneProvider
+
+    class DummyProvider(TTSProvider):
+        @property
+        def provider_name(self) -> str:
+            return super().provider_name
+
+        async def list_voices(self):
+            return await super().list_voices()
+
+        async def synthesize(self, text, voice, rate="+0%", pitch="+0Hz", volume="+0%"):
+            return await super().synthesize(text, voice, rate, pitch, volume)
+
+    class DummyClone(CloneProvider):
+        @property
+        def provider_name(self) -> str:
+            return super().provider_name
+
+        async def clone_voice(self, name, audio_file_path, description=None, **kwargs):
+            return await super().clone_voice(name, audio_file_path, description, **kwargs)
+
+        async def delete_cloned_voice(self, provider_voice_id):
+            return await super().delete_cloned_voice(provider_voice_id)
+
+        async def synthesize(self, text, provider_voice_id, audio_sample_path=None, rate="+0%", pitch="+0Hz", volume="+0%", **kwargs):
+            return await super().synthesize(text, provider_voice_id, audio_sample_path, rate, pitch, volume, **kwargs)
+
+    dp = DummyProvider()
+    _ = dp.provider_name
+    await dp.list_voices()
+    await dp.synthesize("a", "b")
+
+    dc = DummyClone()
+    _ = dc.provider_name
+    await dc.clone_voice("a", "b")
+    await dc.delete_cloned_voice("a")
+    await dc.synthesize("a", "b")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -175,8 +175,10 @@ async def list_users(
         count_stmt = count_stmt.where(User.subscription_tier == tier)
 
     total = (await db.execute(count_stmt)).scalar() or 0
-    offset = (page - 1) * limit
-    stmt = stmt.order_by(desc(User.created_at)).offset(offset).limit(limit)
+    p = page if isinstance(page, int) else 1
+    l = limit if isinstance(limit, int) else 20
+    offset = (p - 1) * l
+    stmt = stmt.order_by(desc(User.created_at)).offset(offset).limit(l)
     users = list((await db.execute(stmt)).scalars().all())
 
     items: List[AdminUserListItem] = []
@@ -199,12 +201,12 @@ async def list_users(
             created_at=u.created_at,
         ))
 
-    total_pages = max(1, (total + limit - 1) // limit)
+    total_pages = max(1, (total + l - 1) // l)
     return AdminUserListResponse(
         items=items,
         total=total,
-        page=page,
-        limit=limit,
+        page=p,
+        limit=l,
         total_pages=total_pages,
     )
 
@@ -465,19 +467,21 @@ async def list_jobs(
     stmt = select(Generation, User.email.label("user_email")).outerjoin(User, Generation.user_id == User.id)
     count_stmt = select(func.count(Generation.id))
 
-    if status_filter:
+    if status_filter and isinstance(status_filter, str):
         stmt = stmt.where(Generation.status == status_filter)
         count_stmt = count_stmt.where(Generation.status == status_filter)
-    if user_id:
+    if user_id and isinstance(user_id, int):
         stmt = stmt.where(Generation.user_id == user_id)
         count_stmt = count_stmt.where(Generation.user_id == user_id)
-    if q:
+    if q and isinstance(q, str):
         stmt = stmt.where(Generation.text.ilike(f"%{q.strip()}%"))
         count_stmt = count_stmt.where(Generation.text.ilike(f"%{q.strip()}%"))
 
     total = (await db.execute(count_stmt)).scalar() or 0
-    offset = (page - 1) * limit
-    stmt = stmt.order_by(desc(Generation.created_at)).offset(offset).limit(limit)
+    p = page if isinstance(page, int) else 1
+    l = limit if isinstance(limit, int) else 20
+    offset = (p - 1) * l
+    stmt = stmt.order_by(desc(Generation.created_at)).offset(offset).limit(l)
     rows = (await db.execute(stmt)).all()
 
     items: List[AdminJobListItem] = []
@@ -498,12 +502,12 @@ async def list_jobs(
             file_path=gen.file_path,
         ))
 
-    total_pages = max(1, (total + limit - 1) // limit)
+    total_pages = max(1, (total + l - 1) // l)
     return AdminJobListResponse(
         items=items,
         total=total,
-        page=page,
-        limit=limit,
+        page=p,
+        limit=l,
         total_pages=total_pages,
     )
 
@@ -837,20 +841,22 @@ async def list_admin_orders(
     stmt = (
         select(Order, User.email.label("user_email"), PricingPlan.name.label("plan_name"))
         .join(User, Order.user_id == User.id)
-        .join(PricingPlan, Order.plan_id == PricingPlan.id)
+        .outerjoin(PricingPlan, Order.plan_id == PricingPlan.id)
     )
     count_stmt = select(func.count(Order.id))
 
-    if status_filter:
+    if status_filter and isinstance(status_filter, str):
         stmt = stmt.where(Order.status == status_filter)
         count_stmt = count_stmt.where(Order.status == status_filter)
-    if q:
+    if q and isinstance(q, str):
         stmt = stmt.where(Order.order_code.ilike(f"%{q.strip()}%"))
         count_stmt = count_stmt.where(Order.order_code.ilike(f"%{q.strip()}%"))
 
     total = (await db.execute(count_stmt)).scalar() or 0
-    offset = (page - 1) * limit
-    stmt = stmt.order_by(desc(Order.created_at)).offset(offset).limit(limit)
+    p = page if isinstance(page, int) else 1
+    l = limit if isinstance(limit, int) else 20
+    offset = (p - 1) * l
+    stmt = stmt.order_by(desc(Order.created_at)).offset(offset).limit(l)
     rows = (await db.execute(stmt)).all()
 
     items: List[AdminOrderListItem] = []
@@ -869,12 +875,12 @@ async def list_admin_orders(
             created_at=o.created_at,
         ))
 
-    total_pages = max(1, (total + limit - 1) // limit)
+    total_pages = max(1, (total + l - 1) // l)
     return AdminOrderListResponse(
         items=items,
         total=total,
-        page=page,
-        limit=limit,
+        page=p,
+        limit=l,
         total_pages=total_pages,
     )
 
@@ -924,7 +930,7 @@ async def list_affiliate_withdrawals(
     admin: User = Depends(get_current_admin_user),
 ):
     stmt = select(AffiliateWithdrawal, User.email.label("user_email")).join(User, AffiliateWithdrawal.user_id == User.id)
-    if status_filter:
+    if status_filter and isinstance(status_filter, str):
         stmt = stmt.where(AffiliateWithdrawal.status == status_filter)
 
     rows = (await db.execute(stmt.order_by(desc(AffiliateWithdrawal.created_at)))).all()
@@ -1077,13 +1083,15 @@ async def get_audit_logs(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(get_current_admin_user),
 ):
+    p = page if isinstance(page, int) else 1
+    l = limit if isinstance(limit, int) else 20
     items, total = await AdminAuditService.list_logs(
         db=db,
         action=action,
         target_type=target_type,
         admin_id=admin_id,
-        page=page,
-        limit=limit,
+        page=p,
+        limit=l,
     )
 
     result_items: List[AdminAuditLogItem] = []
@@ -1098,7 +1106,7 @@ async def get_audit_logs(
         result_items.append(AdminAuditLogItem(
             id=it.id,
             admin_id=it.admin_id,
-            admin_email=it.admin.email if it.admin else None,
+            admin_email=getattr(it, "admin_email", None),
             action=it.action,
             target_type=it.target_type,
             target_id=it.target_id,
@@ -1107,11 +1115,11 @@ async def get_audit_logs(
             created_at=it.created_at,
         ))
 
-    total_pages = max(1, (total + limit - 1) // limit)
+    total_pages = max(1, (total + l - 1) // l)
     return AdminAuditLogResponse(
         items=result_items,
         total=total,
-        page=page,
-        limit=limit,
+        page=p,
+        limit=l,
         total_pages=total_pages,
     )
