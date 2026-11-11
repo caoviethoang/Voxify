@@ -1,5 +1,6 @@
 from app.routes.admin import router as admin_router
 from app.routes.api_keys import router as developers_router
+from app.routes.audio_tools import router as audio_tools_router
 from app.routes.auth import router as auth_router
 from app.routes.config import router as config_router
 from app.routes.credits import router as credit_router
@@ -15,6 +16,7 @@ from app.routes.voices import router as voices_router
 
 __all__ = [
     "admin_router",
+    "audio_tools_router",
     "auth_router",
     "config_router",
     "credit_router",

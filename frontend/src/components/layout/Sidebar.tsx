@@ -3,6 +3,8 @@ import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../hooks/useAuth'
 import { useAppConfig } from '../../hooks/useAppConfig'
+import { useAudioTools } from '../../hooks/useAudioTools'
+import { ToolIcon } from '../tools/ToolIcon'
 import {
   LayoutDashboard,
   Mic,
@@ -11,7 +13,6 @@ import {
   AudioWaveform,
   History,
   Scissors,
-  Sliders,
   FolderKanban,
   Sparkles,
   Gift,
@@ -25,6 +26,7 @@ import {
   Share2,
   Disc,
   Coins,
+  Wrench,
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -96,12 +98,26 @@ export default function Sidebar({
     }
   }
 
-  // Danh mục công cụ âm thanh
-  const audioTools: NavItemDef[] = [
-    { id: 'cutter', label: 'Cắt ghép Audio', path: '/tools/cutter', icon: Scissors, disabled: true, badge: 'Sắp ra mắt' },
-    { id: 'enhancer', label: 'Lọc tạp âm AI', path: '/tools/enhancer', icon: Volume2, disabled: true, badge: 'Sắp ra mắt' },
-    { id: 'equalizer', label: 'Bộ cân bằng âm sắc', path: '/tools/equalizer', icon: Sliders, disabled: true, badge: 'Sắp ra mắt' },
-  ]
+  // Danh mục công cụ âm thanh tải động từ registry
+  const { data: toolsData } = useAudioTools()
+
+  const audioTools: NavItemDef[] = useMemo(() => {
+    if (!toolsData?.categories) {
+      return [
+        { id: 'trim', label: 'Cắt ghép Audio', path: '/tools/trim', icon: Scissors, badge: 'Miễn phí' },
+        { id: 'volume_normalize', label: 'Chuẩn hóa âm lượng', path: '/tools/volume_normalize', icon: Volume2, badge: 'Miễn phí' },
+        { id: 'noise_reduction', label: 'Lọc tạp âm AI', path: '/tools/noise_reduction', icon: Sparkles, badge: 'Miễn phí' },
+      ]
+    }
+    const tools = toolsData.categories.flatMap((c) => c.tools)
+    return tools.map((tool) => ({
+      id: tool.id,
+      label: tool.name_vi,
+      path: `/tools/${tool.id}`,
+      icon: (props: { className?: string }) => <ToolIcon name={tool.icon} {...props} />,
+      badge: tool.cost_type === 'free' ? 'Miễn phí' : tool.heavy ? 'GPU' : `${tool.cost_credits}cr`,
+    }))
+  }, [toolsData])
 
   const filteredTools = useMemo(() => {
     if (!toolSearch.trim()) return audioTools
@@ -113,6 +129,7 @@ export default function Sidebar({
     dashboard: { id: 'dashboard', label: t('nav.dashboard') || 'Trang chủ', path: '/', icon: LayoutDashboard },
     tts: { id: 'tts', label: 'Studio (Text to Speech)', path: '/studio', icon: Mic },
     library: { id: 'library', label: 'Thư viện giọng', path: '/voices', icon: Volume2 },
+    tools: { id: 'tools', label: 'Công cụ âm thanh', path: '/tools', icon: Wrench },
     history: { id: 'history', label: t('nav.processHistory') || 'Lịch sử xử lý', path: '/history', icon: History },
     credits: { id: 'credits', label: 'Lịch sử Credit', path: '/credits', icon: Coins },
     pricing: { id: 'pricing', label: t('nav.upgradePlan') || 'Gói cước', path: '/pricing', icon: Sparkles },
@@ -414,26 +431,54 @@ export default function Sidebar({
                 </div>
               )}
 
+              {/* Tất cả công cụ (Hub) */}
+              <NavLink
+                to="/tools"
+                onClick={handleLinkClick}
+                end
+                title="Tất cả công cụ âm thanh"
+                className={({ isActive }) =>
+                  `flex items-center rounded-control text-xs font-medium transition-all ${
+                    isCollapsedMode ? 'justify-center py-2 px-0' : 'gap-2.5 px-2.5 py-1.5'
+                  } ${
+                    isActive
+                      ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/80 dark:bg-indigo-600/20 dark:text-white dark:border-indigo-500/30 font-semibold'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-white/70 dark:hover:text-white dark:hover:bg-[#12151C]'
+                  }`
+                }
+              >
+                <Wrench className="w-4 h-4 flex-shrink-0 text-indigo-500 dark:text-indigo-400" />
+                {!isCollapsedMode && <span>Tất cả công cụ</span>}
+              </NavLink>
+
               {filteredTools.map((t) => {
                 const Icon = t.icon
                 return (
-                  <div
+                  <NavLink
                     key={t.id}
-                    title={`${t.label} (${t.badge})`}
-                    className={`flex items-center rounded-control text-xs text-slate-400 dark:text-white/30 cursor-not-allowed select-none ${
-                      isCollapsedMode ? 'justify-center py-2 px-0' : 'justify-between px-2.5 py-1.5'
-                    }`}
+                    to={t.path}
+                    onClick={handleLinkClick}
+                    title={t.label}
+                    className={({ isActive }) =>
+                      `flex items-center rounded-control text-xs font-medium transition-all ${
+                        isCollapsedMode ? 'justify-center py-2 px-0' : 'justify-between px-2.5 py-1.5'
+                      } ${
+                        isActive
+                          ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/80 dark:bg-indigo-600/20 dark:text-white dark:border-indigo-500/30 font-semibold'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-white/70 dark:hover:text-white dark:hover:bg-[#12151C]'
+                      }`
+                    }
                   >
-                    <div className={`flex items-center ${isCollapsedMode ? 'justify-center' : 'gap-2.5'}`}>
-                      <Icon className="w-4 h-4 flex-shrink-0 text-slate-400 dark:text-white/30" />
-                      {!isCollapsedMode && <span>{t.label}</span>}
+                    <div className={`flex items-center ${isCollapsedMode ? 'justify-center' : 'gap-2.5'} min-w-0`}>
+                      <Icon className="w-4 h-4 flex-shrink-0 text-slate-500 dark:text-white/50" />
+                      {!isCollapsedMode && <span className="truncate">{t.label}</span>}
                     </div>
-                    {!isCollapsedMode && (
-                      <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200 dark:bg-white/[0.06] dark:text-white/40 dark:border-white/[0.08]">
+                    {!isCollapsedMode && t.badge && (
+                      <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-200/60 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20 flex-shrink-0 ml-1">
                         {t.badge}
                       </span>
                     )}
-                  </div>
+                  </NavLink>
                 )
               })}
             </div>

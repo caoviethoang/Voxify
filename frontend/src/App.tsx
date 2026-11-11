@@ -13,6 +13,8 @@ import Pricing from './pages/Pricing'
 import PlaceholderPage from './pages/PlaceholderPage'
 import Developers from './pages/Developers'
 import Profile from './pages/Profile'
+import AudioToolsHub from './pages/AudioToolsHub'
+import AudioToolWorkspace from './pages/AudioToolWorkspace'
 import NotFound from './pages/NotFound'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -68,6 +70,10 @@ export default function App() {
 
               {/* Hồ sơ người dùng */}
               <Route path="/profile" element={<Profile />} />
+
+              {/* Nền tảng công cụ âm thanh (Issue #20) */}
+              <Route path="/tools" element={<AudioToolsHub />} />
+              <Route path="/tools/:toolId" element={<AudioToolWorkspace />} />
 
               {/* Các trang công cụ, lịch sử, mở rộng */}
               <Route path="/history" element={<History />} />
