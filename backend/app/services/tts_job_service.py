@@ -136,8 +136,15 @@ class TTSJobService:
 
         logger.info(f"Đã tạo Job TTS #{generation.id} (user={user.id if user else 'guest'}, chars={char_count}, cost={cost})")
 
-        # Kích hoạt worker bất đồng bộ
-        asyncio.create_task(self._execute_job_in_background(generation.id, apply_dict))
+        # Kích hoạt worker bất đồng bộ (ưu tiên qua ARQ worker, fallback qua asyncio.create_task)
+        try:
+            from app.workers.worker import enqueue_tts_job
+            enqueued = await enqueue_tts_job(generation.id, apply_dict)
+            if not enqueued:
+                asyncio.create_task(self._execute_job_in_background(generation.id, apply_dict))
+        except Exception as e:
+            logger.warning(f"Lỗi khi dispatch job #{generation.id} tới queue: {e}, chạy background task cục bộ")
+            asyncio.create_task(self._execute_job_in_background(generation.id, apply_dict))
 
         return generation
 
