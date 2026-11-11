@@ -1,0 +1,159 @@
+services:
+  # ── Backend FastAPI (API Server) ──────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: voxify_prod_backend
+    env_file:
+      - path: .env.production
+        required: true
+    environment:
+      - RUN_MIGRATIONS=true
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - voxify_storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - voxify_network
+
+  # ── ARQ Worker (Background Tasks & TTS Queue) ─────────────────
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: voxify_prod_worker
+    env_file:
+      - path: .env.production
+        required: true
+    environment:
+      - RUN_MIGRATIONS=false
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - voxify_storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    command: ["python", "-m", "arq", "app.workers.worker.WorkerSettings"]
+    restart: always
+    networks:
+      - voxify_network
+
+  # ── Frontend (SPA Nginx) ──────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: voxify_prod_frontend
+    restart: always
+    depends_on:
+      - backend
+    networks:
+      - voxify_network
+
+  # ── PostgreSQL 16 Database ────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: voxify_prod_db
+    env_file:
+      - path: .env.production
+        required: true
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - voxify_network
+
+  # ── Redis 7 (Hàng đợi ARQ & Cache & Rate Limiting) ─────────────
+  redis:
+    image: redis:7-alpine
+    container_name: voxify_prod_redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_prod_data:/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - voxify_network
+
+  # ── Caddy Reverse Proxy & Automatic Let's Encrypt SSL ──────────
+  caddy:
+    image: caddy:2-alpine
+    container_name: voxify_prod_caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+      - ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - voxify_network
+
+  # ── Automated DB Backup (Chạy sao lưu định kỳ) ────────────────
+  db_backup:
+    image: postgres:16-alpine
+    container_name: voxify_prod_backup
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - path: .env.production
+        required: true
+    environment:
+      POSTGRES_HOST: db
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup_db.sh:/usr/local/bin/backup_db.sh:ro
+    entrypoint: |
+      sh -c '
+        echo "0 2 * * * /usr/local/bin/backup_db.sh >> /var/log/backup.log 2>&1" > /etc/crontabs/root
+        crond -f -l 2
+      '
+    networks:
+      - voxify_network
+
+networks:
+  voxify_network:
+    driver: bridge
+
+volumes:
+  postgres_prod_data:
+  redis_prod_data:
+  voxify_storage:
+  caddy_data:
+  caddy_config:

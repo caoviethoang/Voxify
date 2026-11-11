@@ -64,9 +64,16 @@ class Settings(BaseSettings):
     # Redis (tùy chọn, dùng cho hàng đợi Phase 2+)
     redis_url: str = "redis://localhost:6379/0"
 
-    # Lưu trữ file audio
+    # Lưu trữ file audio & Cloudflare R2 / S3 (Issue #17)
     storage_path: str = "./storage/audio"
-    storage_backend: str = "local"  # "local" | "s3"
+    storage_backend: str = "local"  # "local" | "s3" | "r2"
+    s3_endpoint_url: str = ""
+    s3_access_key_id: str = ""
+    s3_secret_access_key: str = ""
+    s3_bucket_name: str = "voxify"
+    s3_region_name: str = "auto"
+    s3_public_cdn_url: str = ""
+    s3_presigned_expiry_seconds: int = 3600
 
     # TTS engine
     tts_provider: str = "edge"  # "edge" | "azure" | "elevenlabs"

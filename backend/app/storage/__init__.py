@@ -25,6 +25,10 @@ class StorageBackend(ABC):
 
 def get_storage(backend: str = "local") -> StorageBackend:
     """Factory tạo storage backend theo cấu hình."""
-    if backend == "local":
+    backend_lower = backend.lower()
+    if backend_lower == "local":
         return LocalStorage()  # type: ignore[return-value]
+    if backend_lower in ("s3", "r2"):
+        from app.storage.s3 import S3Storage
+        return S3Storage()
     raise ValueError(f"Storage backend '{backend}' chưa được hỗ trợ.")

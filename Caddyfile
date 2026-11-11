@@ -1,0 +1,44 @@
+{
+    email {$ACME_EMAIL:admin@example.com}
+    admin off
+}
+
+{$DOMAIN:localhost} {
+    # Tự động nén zstandard và gzip
+    encode zstd gzip
+
+    # Security Headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(self), geolocation=()"
+        -Server
+    }
+
+    # API endpoints & Health/Docs routes -> FastAPI backend
+    @backend_paths {
+        path /api/*
+        path /health
+        path /metrics
+        path /docs*
+        path /redoc*
+        path /openapi.json
+        path /storage/*
+    }
+    handle @backend_paths {
+        reverse_proxy backend:8000 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up Host {host}
+        }
+    }
+
+    # Tất cả các route còn lại -> Frontend SPA (Nginx)
+    handle {
+        reverse_proxy frontend:80
+    }
+}
