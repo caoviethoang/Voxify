@@ -1,14 +1,10 @@
 """Công cụ Lọc tạp âm & Tiếng ồn nền (Noise Reduction) — Audio Tools Framework."""
 from __future__ import annotations
 
-import asyncio
 import logging
-import os
-from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Optional
 
 from app.audio_tools.base import AudioTool, AudioToolCategory
-from app.services.audio_service import AudioService
 
 logger = logging.getLogger(__name__)
 
@@ -88,34 +84,12 @@ class NoiseReductionTool(AudioTool):
         if progress_cb:
             await progress_cb(40)
 
-        success = False
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            _, stderr = await proc.communicate()
-            if proc.returncode == 0:
-                success = True
-            else:
-                logger.warning(f"ffmpeg noise_reduction thất bại: {stderr.decode('utf-8', errors='ignore')}")
-        except Exception as e:
-            logger.warning(f"Không thể chạy ffmpeg cho noise_reduction: {e}")
-
-        if not success:
-            await self._safe_copy_fallback(input_path, output_path)
+        await self.run_ffmpeg_command(cmd, input_path, output_path, "noise_reduction")
 
         if progress_cb:
             await progress_cb(100)
 
-        measured_duration = AudioService.measure_duration(output_path)
-        size_bytes = os.path.getsize(output_path) if os.path.exists(output_path) else 0
-
-        return {
-            "output_path": output_path,
-            "output_filename": Path(output_path).name,
-            "duration": round(measured_duration, 2),
-            "size_bytes": size_bytes,
-            "extra": {"reduction_level": level, "highpass_hz": highpass_hz},
-        }
+        return self.build_tool_result(
+            output_path,
+            extra={"reduction_level": level, "highpass_hz": highpass_hz},
+        )

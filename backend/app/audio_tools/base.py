@@ -2,9 +2,16 @@
 from __future__ import annotations
 
 import abc
+import asyncio
+import logging
 import os
 import shutil
+from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List, Optional
+
+from app.services.audio_service import AudioService
+
+logger = logging.getLogger(__name__)
 
 
 class AudioToolCategory:
@@ -128,6 +135,58 @@ class AudioTool(abc.ABC):
         if os.path.exists(input_path):
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             shutil.copy2(input_path, output_path)
+
+    async def run_ffmpeg_command(
+        self,
+        cmd: List[str],
+        input_path: str,
+        output_path: str,
+        tool_name: str,
+    ) -> bool:
+        """
+        Thực thi tiến trình ffmpeg với logging lỗi chi tiết và fallback an toàn.
+        Trả về True nếu lệnh hoàn thành thành công (returncode == 0), ngược lại False.
+        """
+        success = False
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await proc.communicate()
+            if proc.returncode == 0:
+                success = True
+            else:
+                logger.warning(
+                    f"ffmpeg {tool_name} thất bại: {stderr.decode('utf-8', errors='ignore')}"
+                )
+        except Exception as e:
+            logger.warning(f"Không thể chạy ffmpeg cho {tool_name}: {e}")
+
+        if not success:
+            await self._safe_copy_fallback(input_path, output_path)
+
+        return success
+
+    def build_tool_result(
+        self,
+        output_path: str,
+        extra: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Đo đạc thời lượng âm thanh, kích thước file và đóng gói kết quả chuẩn.
+        """
+        measured_duration = AudioService.measure_duration(output_path)
+        size_bytes = os.path.getsize(output_path) if os.path.exists(output_path) else 0
+
+        return {
+            "output_path": output_path,
+            "output_filename": Path(output_path).name,
+            "duration": round(measured_duration, 2),
+            "size_bytes": size_bytes,
+            "extra": extra or {},
+        }
 
 
 class AudioToolRegistry:
