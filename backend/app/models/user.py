@@ -1,14 +1,13 @@
 """Model người dùng."""
-from datetime import UTC, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Integer, String
+from sqlalchemy import Boolean, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db import Base
+from app.db import Base, TimestampMixin
 
 
-class User(Base):
+class User(Base, TimestampMixin):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -33,18 +32,6 @@ class User(Base):
     credit_balance: Mapped[int] = mapped_column(Integer, default=10000, nullable=False)
     # Giữ cột credits để tương thích ngược với code cũ / migration cũ
     credits: Mapped[int] = mapped_column(Integer, default=10000, nullable=False)
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        nullable=False,
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC),
-        nullable=False,
-    )
 
     generations: Mapped[list["Generation"]] = relationship(
         "Generation", back_populates="user", lazy="select"

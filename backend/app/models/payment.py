@@ -1,12 +1,12 @@
 """Models cho hệ thống Thanh toán, Gói dịch vụ, Mã giảm giá và Đơn hàng."""
 import enum
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db import Base
+from app.db import Base, CreatedAtMixin, TimestampMixin
 
 
 class PlanType(str, enum.Enum):
@@ -33,7 +33,7 @@ class DiscountType(str, enum.Enum):
     FIXED = "fixed"
 
 
-class PricingPlan(Base):
+class PricingPlan(Base, TimestampMixin):
     """Cấu hình các gói dịch vụ và gói nạp credit lưu trong DB."""
     __tablename__ = "pricing_plans"
 
@@ -55,22 +55,10 @@ class PricingPlan(Base):
     display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        nullable=False,
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC),
-        nullable=False,
-    )
-
     orders: Mapped[list["Order"]] = relationship("Order", back_populates="plan")
 
 
-class Coupon(Base):
+class Coupon(Base, CreatedAtMixin):
     """Mã giảm giá."""
     __tablename__ = "coupons"
 
@@ -83,16 +71,11 @@ class Coupon(Base):
     used_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        nullable=False,
-    )
 
     orders: Mapped[list["Order"]] = relationship("Order", back_populates="coupon")
 
 
-class Order(Base):
+class Order(Base, TimestampMixin):
     """Quản lý đơn hàng nạp credit / nâng cấp gói."""
     __tablename__ = "orders"
 
@@ -131,24 +114,12 @@ class Order(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        nullable=False,
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC),
-        nullable=False,
-    )
-
     user: Mapped["User"] = relationship("User", back_populates="orders", lazy="selectin")
     plan: Mapped[Optional["PricingPlan"]] = relationship("PricingPlan", back_populates="orders", lazy="selectin")
     coupon: Mapped[Optional["Coupon"]] = relationship("Coupon", back_populates="orders", lazy="selectin")
 
 
-class PaymentWebhookLog(Base):
+class PaymentWebhookLog(Base, CreatedAtMixin):
     """Sổ nhật ký webhook thanh toán để đảm bảo Idempotent tuyệt đối."""
     __tablename__ = "payment_webhook_logs"
 
@@ -158,8 +129,3 @@ class PaymentWebhookLog(Base):
     order_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
     payload: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_processed: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        nullable=False,
-    )

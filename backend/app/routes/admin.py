@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import create_access_token
+from app.core.security import create_access_token, get_client_ip
 from app.db import get_db
 from app.dependencies import get_current_admin_user, get_tts_service
 from app.models.admin import (
@@ -56,12 +56,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin", tags=["Admin Portal"])
 
 
-def _get_client_ip(request: Request) -> str:
-    """Trích xuất IP khách hàng, hỗ trợ qua Reverse Proxy."""
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "127.0.0.1"
+_get_client_ip = get_client_ip
 
 
 # =============================================================

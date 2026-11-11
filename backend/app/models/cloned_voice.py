@@ -1,14 +1,13 @@
 """Models cho tính năng Clone giọng nói (Voice Cloning), lưu audit log đồng ý và báo cáo lạm dụng."""
-from datetime import UTC, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db import Base
+from app.db import Base, CreatedAtMixin, TimestampMixin
 
 
-class ClonedVoice(Base):
+class ClonedVoice(Base, TimestampMixin):
     """Bản ghi giọng clone của người dùng."""
     __tablename__ = "cloned_voices"
 
@@ -43,18 +42,6 @@ class ClonedVoice(Base):
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        nullable=False,
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC),
-        nullable=False,
-    )
-
     user: Mapped["User"] = relationship("User", back_populates="cloned_voices")
     consent_logs: Mapped[list["VoiceConsentLog"]] = relationship(
         "VoiceConsentLog", back_populates="cloned_voice", cascade="all, delete-orphan"
@@ -64,7 +51,7 @@ class ClonedVoice(Base):
     )
 
 
-class VoiceConsentLog(Base):
+class VoiceConsentLog(Base, CreatedAtMixin):
     """Audit log đồng ý bản quyền & cam kết chủ quyền giọng nói (Bắt buộc theo luật/quy định)."""
     __tablename__ = "voice_consent_logs"
 
@@ -81,16 +68,10 @@ class VoiceConsentLog(Base):
     ip_address: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     user_agent: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        nullable=False,
-    )
-
     cloned_voice: Mapped[Optional["ClonedVoice"]] = relationship("ClonedVoice", back_populates="consent_logs")
 
 
-class VoiceAbuseReport(Base):
+class VoiceAbuseReport(Base, CreatedAtMixin):
     """Báo cáo vi phạm / lạm dụng clone giọng nói (mạo danh, không có sự đồng ý, phỉ báng)."""
     __tablename__ = "voice_abuse_reports"
 
@@ -108,11 +89,5 @@ class VoiceAbuseReport(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="pending", nullable=False)  # pending | reviewed | resolved | dismissed
     ip_address: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        nullable=False,
-    )
 
     cloned_voice: Mapped["ClonedVoice"] = relationship("ClonedVoice", back_populates="abuse_reports")

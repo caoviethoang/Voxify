@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 
 import bcrypt
 import jwt
+from fastapi import Request
 
 from app.config import get_settings
 
@@ -108,4 +109,16 @@ def decode_token(token: str) -> Optional[Dict[str, Any]]:
     except jwt.PyJWTError as e:
         logger.debug(f"Token không hợp lệ: {e}")
         return None
+
+
+def get_client_ip(request: Request, default: str = "127.0.0.1") -> str:
+    """
+    Trích xuất IP khách hàng chuẩn xác, hỗ trợ qua Reverse Proxy / Cloudflare (X-Forwarded-For).
+    """
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return default
 

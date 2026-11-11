@@ -18,6 +18,7 @@ from app.schemas.auth import (
     UserOut,
     UserRegisterRequest,
 )
+from app.schemas.common import PaginatedResponse
 from app.schemas.tts import TTSRequest, TTSResponse
 from app.schemas.voice import VoiceListResponse, VoiceSchema
 
@@ -42,4 +43,5 @@ __all__ = [
     "V1TTSResponse",
     "V1JobResponse",
     "V1CreditsResponse",
+    "PaginatedResponse",
 ]

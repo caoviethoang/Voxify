@@ -6,6 +6,7 @@ from fastapi import Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.rate_limiter import RateLimiterService
+from app.core.security import get_client_ip
 from app.db import get_db
 from app.models.api_key import ApiKey
 from app.models.user import User
@@ -63,10 +64,7 @@ async def get_v1_api_user(
     if not allowed:
         response.headers["Retry-After"] = str(reset_seconds)
         # Ghi nhận log request bị chặn rate limit
-        client_ip = request.client.host if request.client else None
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            client_ip = forwarded.split(",")[0].strip()
+        client_ip = get_client_ip(request)
         await ApiKeyService.log_usage(
             db=db,
             api_key_id=api_key.id,
