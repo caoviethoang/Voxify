@@ -1,9 +1,10 @@
 """Kết nối cơ sở dữ liệu với SQLAlchemy async."""
+from datetime import UTC, datetime
 from typing import AsyncGenerator
 
-from sqlalchemy import event
+from sqlalchemy import DateTime, event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.config import get_settings
 
@@ -47,6 +48,34 @@ AsyncSessionLocal = async_sessionmaker(
 class Base(DeclarativeBase):
     """Lớp base cho tất cả SQLAlchemy models."""
     pass
+
+
+class TimestampMixin:
+    """Mixin cung cấp created_at và updated_at cho SQLAlchemy models."""
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        nullable=False,
+        index=True,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=False,
+    )
+
+
+class CreatedAtMixin:
+    """Mixin cung cấp created_at cho các bảng log và bản ghi bất biến."""
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        nullable=False,
+        index=True,
+    )
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

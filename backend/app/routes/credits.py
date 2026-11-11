@@ -1,7 +1,7 @@
 """Routes quản lý Credit và lịch sử giao dịch sổ cái."""
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
@@ -11,6 +11,7 @@ from app.config import get_settings
 from app.db import get_db
 from app.dependencies import get_current_active_user
 from app.models.user import User
+from app.schemas.common import PaginatedResponse
 from app.services.credit_service import CreditService
 
 logger = logging.getLogger(__name__)
@@ -38,12 +39,9 @@ class CreditTransactionItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class CreditTransactionsListResponse(BaseModel):
-    items: List[CreditTransactionItem]
-    total: int
-    page: int
-    limit: int
-    total_pages: int
+class CreditTransactionsListResponse(PaginatedResponse[CreditTransactionItem]):
+    """Danh sách giao dịch credit có phân trang."""
+    pass
 
 
 class CreditEstimateResponse(BaseModel):

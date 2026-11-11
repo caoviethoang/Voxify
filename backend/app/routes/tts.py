@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.core.errors import AppError
 from app.core.rate_limiter import check_job_creation_rate_limit, check_user_concurrent_jobs
+from app.core.security import get_client_ip
 from app.core.security_validation import validate_input_text
 from app.db import get_db
 from app.dependencies import get_current_active_user, get_optional_current_user, get_tts_service
@@ -83,9 +84,7 @@ async def create_tts_job(
     3. Khấu trừ credit ngay lập tức (reserve).
     4. Đưa vào hàng đợi worker xử lý ngầm và trả về thông tin job.
     """
-    client_ip = raw_request.client.host if raw_request.client else None
-    if "x-forwarded-for" in raw_request.headers:
-        client_ip = raw_request.headers["x-forwarded-for"].split(",")[0].strip()
+    client_ip = get_client_ip(raw_request)
 
     # Rate limiting chống spam
     check_job_creation_rate_limit(raw_request, user_id=current_user.id if current_user else None)
@@ -256,9 +255,7 @@ async def synthesize_speech(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_current_user),
 ):
-    client_ip = raw_request.client.host if raw_request.client else None
-    if "x-forwarded-for" in raw_request.headers:
-        client_ip = raw_request.headers["x-forwarded-for"].split(",")[0].strip()
+    client_ip = get_client_ip(raw_request)
 
     # Rate limiting
     check_job_creation_rate_limit(raw_request, user_id=current_user.id if current_user else None)

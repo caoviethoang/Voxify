@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.core.rate_limiter import check_job_creation_rate_limit
+from app.core.security import get_client_ip
 from app.db import get_db
 from app.dependencies import get_current_active_user, get_optional_current_user
 from app.models.cloned_voice import ClonedVoice
@@ -108,9 +109,7 @@ async def create_voice_clone(
         raise HTTPException(status_code=400, detail="Tệp âm thanh không hợp lệ hoặc quá nhỏ.")
 
     # Lấy IP & User Agent
-    client_ip = request.client.host if request.client else None
-    if "x-forwarded-for" in request.headers:
-        client_ip = request.headers["x-forwarded-for"].split(",")[0].strip()
+    client_ip = get_client_ip(request)
     user_agent = request.headers.get("user-agent", "")
 
     try:
@@ -318,9 +317,7 @@ async def report_voice_abuse(
     current_user: Optional[User] = Depends(get_optional_current_user),
 ):
     """Cơ chế báo cáo lạm dụng: mạo danh chính trị gia, người nổi tiếng, không có sự đồng ý hoặc phát tán tin giả."""
-    client_ip = request.client.host if request.client else None
-    if "x-forwarded-for" in request.headers:
-        client_ip = request.headers["x-forwarded-for"].split(",")[0].strip()
+    client_ip = get_client_ip(request)
 
     try:
         report = await _clone_service.report_abuse(

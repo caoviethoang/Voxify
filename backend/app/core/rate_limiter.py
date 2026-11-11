@@ -9,6 +9,7 @@ from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.core.security import get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +29,7 @@ def check_login_rate_limit(
     Kiểm tra giới hạn số lần đăng nhập (5 lần / phút / IP).
     Nếu vượt quá, trả lỗi HTTP 429 Too Many Requests.
     """
-    client_ip = request.client.host if request.client else "unknown"
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        client_ip = forwarded.split(",")[0].strip()
+    client_ip = get_client_ip(request, default="unknown")
 
     now = time.time()
     cutoff = now - window_seconds
@@ -51,10 +49,7 @@ def check_login_rate_limit(
 
 def reset_login_rate_limit(request: Request) -> None:
     """Xóa lịch sử lần thử của IP sau khi đăng nhập thành công."""
-    client_ip = request.client.host if request.client else "unknown"
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        client_ip = forwarded.split(",")[0].strip()
+    client_ip = get_client_ip(request, default="unknown")
 
     with _lock:
         if client_ip in _attempts:
@@ -85,10 +80,7 @@ def check_job_creation_rate_limit(
     Giới hạn tốc độ tạo Job (TTS / Voice Clone) theo IP và theo User ID (30 req / phút).
     Ngăn chặn bot spam làm cạn kiệt tài nguyên máy chủ.
     """
-    client_ip = request.client.host if request.client else "unknown"
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        client_ip = forwarded.split(",")[0].strip()
+    client_ip = get_client_ip(request, default="unknown")
 
     key = f"user:{user_id}" if user_id else f"ip:{client_ip}"
     now = time.time()

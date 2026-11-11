@@ -1,12 +1,11 @@
 """Model giao dịch credit (Sổ cái - Ledger)."""
 import enum
-from datetime import UTC, datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db import Base
+from app.db import Base, CreatedAtMixin
 
 
 class CreditTransactionType(str, enum.Enum):
@@ -19,7 +18,7 @@ class CreditTransactionType(str, enum.Enum):
     VOICE_CLONE = "voice_clone"
 
 
-class CreditTransaction(Base):
+class CreditTransaction(Base, CreatedAtMixin):
     __tablename__ = "credit_transactions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -37,12 +36,6 @@ class CreditTransaction(Base):
     # Số dư sau giao dịch (để kiểm tra chuỗi sổ cái không bị sai lệch)
     balance_after: Mapped[int] = mapped_column(Integer, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        nullable=False,
-        index=True,
-    )
 
     user: Mapped["User"] = relationship("User", back_populates="credit_transactions")
 

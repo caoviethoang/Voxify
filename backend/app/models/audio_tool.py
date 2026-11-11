@@ -1,9 +1,7 @@
 """Model lưu trữ tiến trình & lịch sử các tác vụ công cụ âm thanh (AudioToolJob)."""
-from datetime import UTC, datetime
 from typing import Optional
 
 from sqlalchemy import (
-    DateTime,
     Float,
     ForeignKey,
     Index,
@@ -13,10 +11,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db import Base
+from app.db import Base, TimestampMixin
 
 
-class AudioToolJob(Base):
+class AudioToolJob(Base, TimestampMixin):
     """Bảng lưu trữ công việc xử lý của công cụ âm thanh (Audio Tools Framework)."""
     __tablename__ = "audio_tool_jobs"
 
@@ -53,19 +51,6 @@ class AudioToolJob(Base):
     # Kinh tế & chi phí
     credit_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        nullable=False,
-        index=True,
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC),
-        nullable=False,
-    )
 
     # Quan hệ
     user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id])  # type: ignore[name-defined]  # noqa: F821

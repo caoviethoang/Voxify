@@ -1,14 +1,13 @@
 """Model lịch sử tạo audio và tiến độ job bất đồng bộ."""
-from datetime import UTC, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db import Base
+from app.db import Base, TimestampMixin
 
 
-class Generation(Base):
+class Generation(Base, TimestampMixin):
     __tablename__ = "generations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -49,18 +48,5 @@ class Generation(Base):
 
     # Webhook callback URL khi hoàn thành job async (Issue #13)
     webhook_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        nullable=False,
-        index=True,
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC),
-        nullable=False,
-    )
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="generations")

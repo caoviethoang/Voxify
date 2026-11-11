@@ -1,13 +1,11 @@
 """Model từ điển phát âm cá nhân (Pronunciation Dictionary)."""
-from datetime import UTC, datetime
-
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db import Base
+from app.db import Base, TimestampMixin
 
 
-class PronunciationDictionary(Base):
+class PronunciationDictionary(Base, TimestampMixin):
     __tablename__ = "pronunciation_dictionaries"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -22,17 +20,5 @@ class PronunciationDictionary(Base):
     category: Mapped[str] = mapped_column(String(50), default="custom", nullable=False)
     # Trạng thái kích hoạt của quy tắc này
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        nullable=False,
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC),
-        nullable=False,
-    )
 
     user: Mapped["User"] = relationship("User", back_populates="pronunciation_rules")

@@ -4,6 +4,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.common import PaginatedResponse
+
 
 # -------------------------------------------------------------
 # 1. Dashboard Schemas
@@ -60,12 +62,9 @@ class AdminUserListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class AdminUserListResponse(BaseModel):
-    items: List[AdminUserListItem]
-    total: int
-    page: int
-    limit: int
-    total_pages: int
+class AdminUserListResponse(PaginatedResponse[AdminUserListItem]):
+    """Danh sách người dùng có phân trang."""
+    pass
 
 
 class AdminUserDetail(BaseModel):
@@ -131,12 +130,9 @@ class AdminJobListItem(BaseModel):
     file_path: Optional[str] = None
 
 
-class AdminJobListResponse(BaseModel):
-    items: List[AdminJobListItem]
-    total: int
-    page: int
-    limit: int
-    total_pages: int
+class AdminJobListResponse(PaginatedResponse[AdminJobListItem]):
+    """Danh sách job TTS & Audio tools của quản trị viên có phân trang."""
+    pass
 
 
 # -------------------------------------------------------------
@@ -206,12 +202,9 @@ class AdminOrderListItem(BaseModel):
     created_at: datetime
 
 
-class AdminOrderListResponse(BaseModel):
-    items: List[AdminOrderListItem]
-    total: int
-    page: int
-    limit: int
-    total_pages: int
+class AdminOrderListResponse(PaginatedResponse[AdminOrderListItem]):
+    """Danh sách đơn hàng quản trị có phân trang."""
+    pass
 
 
 class AdminWithdrawalItem(BaseModel):
@@ -251,9 +244,6 @@ class AdminAuditLogItem(BaseModel):
     created_at: datetime
 
 
-class AdminAuditLogResponse(BaseModel):
-    items: List[AdminAuditLogItem]
-    total: int
-    page: int
-    limit: int
-    total_pages: int
+class AdminAuditLogResponse(PaginatedResponse[AdminAuditLogItem]):
+    """Danh sách nhật ký can thiệp quản trị có phân trang."""
+    pass

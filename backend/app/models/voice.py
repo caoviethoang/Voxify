@@ -2,12 +2,10 @@
 
 Thống nhất giọng hệ thống, giọng clone, giọng import về một bảng duy nhất.
 """
-from datetime import UTC, datetime
 from typing import Optional
 
 from sqlalchemy import (
     Boolean,
-    DateTime,
     Float,
     ForeignKey,
     Index,
@@ -18,10 +16,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db import Base
+from app.db import Base, CreatedAtMixin, TimestampMixin
 
 
-class Voice(Base):
+class Voice(Base, TimestampMixin):
     """Thư viện giọng đọc tập trung — dùng chung cho Studio, Voice Library và API."""
     __tablename__ = "voices"
 
@@ -80,19 +78,6 @@ class Voice(Base):
     # Thống kê
     total_uses: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        nullable=False,
-        index=True,
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC),
-        nullable=False,
-    )
-
     # Relationships
     owner: Mapped[Optional["User"]] = relationship("User", foreign_keys=[owner_id])  # type: ignore[name-defined]  # noqa: F821
     favorites: Mapped[list["VoiceFavorite"]] = relationship(
@@ -105,7 +90,7 @@ class Voice(Base):
     )
 
 
-class VoiceFavorite(Base):
+class VoiceFavorite(Base, CreatedAtMixin):
     """Danh sách yêu thích giọng đọc của từng người dùng."""
     __tablename__ = "voice_favorites"
 
@@ -116,11 +101,6 @@ class VoiceFavorite(Base):
     # voice_id tham chiếu tới voices.id HOẶC voice_id dạng string (giọng hệ thống từ edge-tts)
     voice_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("voices.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        nullable=False,
     )
 
     voice: Mapped["Voice"] = relationship("Voice", back_populates="favorites")

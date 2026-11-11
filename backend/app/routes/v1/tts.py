@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
+from app.core.security import get_client_ip
 from app.db import get_db
 from app.dependencies import get_tts_service
 from app.models.api_key import ApiKey
@@ -57,10 +58,7 @@ async def create_v1_tts(
     if not text:
         raise HTTPException(status_code=400, detail="Văn bản không được để trống.")
 
-    client_ip = request.client.host if request.client else None
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        client_ip = forwarded.split(",")[0].strip()
+    client_ip = get_client_ip(request)
 
     # ------------------------------------------------------------------
     # 1. Chế độ BẤT ĐỒNG BỘ (Async Job)

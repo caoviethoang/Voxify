@@ -45,18 +45,20 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
         expires=max_age,
         httponly=True,
         samesite="lax",
-        secure=False if settings.debug else False,  # Có thể bật True khi chạy HTTPS
+        secure=not settings.debug,
         path="/api/auth",
     )
 
 
 def _clear_refresh_cookie(response: Response) -> None:
     """Xóa cookie refresh token."""
+    settings = get_settings()
     response.delete_cookie(
         key="refresh_token",
         path="/api/auth",
         httponly=True,
         samesite="lax",
+        secure=not settings.debug,
     )
 
 
