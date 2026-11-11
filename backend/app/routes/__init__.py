@@ -10,6 +10,7 @@ from app.routes.payments import router as payment_router
 from app.routes.tts import router as tts_router
 from app.routes.v1 import v1_router
 from app.routes.voice_clone import router as voice_clone_router
+from app.routes.voice_library import router as voice_library_router
 from app.routes.voices import router as voices_router
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "payment_router",
     "tts_router",
     "v1_router",
-    "voices_router",
     "voice_clone_router",
+    "voice_library_router",
+    "voices_router",
 ]

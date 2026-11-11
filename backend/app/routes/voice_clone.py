@@ -32,6 +32,7 @@ from app.schemas.voice_clone import (
     VoiceCloneUpdateRequest,
 )
 from app.services.voice_clone_service import VoiceCloneService
+from app.services.voice_library_service import VoiceLibraryService
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +127,11 @@ async def create_voice_clone(
             ip_address=client_ip,
             user_agent=user_agent,
         )
+        # Đồng bộ vào Voice Library tập trung (Issue #18)
+        try:
+            await VoiceLibraryService.sync_cloned_voice_to_library(db, voice)
+        except Exception as sync_err:
+            logger.warning(f"Không thể sync giọng clone vào Voice Library: {sync_err}")
         return _format_cloned_voice_response(voice)
     except AppError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
@@ -176,6 +182,11 @@ async def update_cloned_voice(
             name=payload.name,
             description=payload.description,
         )
+        # Đồng bộ thay đổi vào Voice Library (Issue #18)
+        try:
+            await VoiceLibraryService.sync_cloned_voice_to_library(db, voice)
+        except Exception as sync_err:
+            logger.warning(f"Không thể sync giọng clone vào Voice Library: {sync_err}")
         return _format_cloned_voice_response(voice)
     except AppError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
@@ -190,6 +201,11 @@ async def delete_cloned_voice(
     """Xóa vĩnh viễn giọng clone, xóa file mẫu gốc và file preview trên đĩa."""
     try:
         await _clone_service.delete_cloned_voice(db, voice_id, current_user)
+        # Xoá khỏi Voice Library tập trung (Issue #18)
+        try:
+            await VoiceLibraryService.remove_user_cloned_voices(db, voice_id)
+        except Exception as sync_err:
+            logger.warning(f"Không thể xoá giọng clone khỏi Voice Library: {sync_err}")
         return {"success": True, "message": "Đã xóa giọng clone và tệp mẫu gốc thành công."}
     except AppError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
