@@ -167,7 +167,18 @@ jobs:
     needs: [backend-lint, backend-test, frontend, build-docker]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
+      - name: Check SSH Configuration
+        id: check_ssh
+        run: |
+          if [ -z "${{ secrets.SSH_HOST }}" ]; then
+            echo "SSH_HOST secret is not configured in GitHub Secrets. Skipping SSH deployment."
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Deploy to VPS via SSH
+        if: steps.check_ssh.outputs.skip != 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
