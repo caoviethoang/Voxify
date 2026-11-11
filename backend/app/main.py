@@ -32,6 +32,7 @@ from app.routes import (
     tts_router,
     v1_router,
     voice_clone_router,
+    voice_library_router,
     voices_router,
 )
 from app.routes.history import cleanup_old_generations
@@ -67,11 +68,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Không thể dọn dẹp bản ghi cũ: {e}")
 
-    # Warmup cache danh sách giọng đọc
+    # Warmup cache danh sách giọng đọc và đồng bộ vào Thư viện Giọng (Issue #18)
     try:
         tts_service = get_tts_service()
-        await tts_service.get_voices()
+        raw_voices = await tts_service.get_voices()
         logger.info("Cache giọng đọc sẵn sàng.")
+        try:
+            from app.db import AsyncSessionLocal
+            from app.services.voice_library_service import VoiceLibraryService
+            async with AsyncSessionLocal() as vl_session:
+                await VoiceLibraryService.sync_system_voices(vl_session, raw_voices, provider="edge")
+            logger.info("Đã đồng bộ giọng hệ thống vào Voice Library.")
+        except Exception as vl_err:
+            logger.warning(f"Không thể đồng bộ Voice Library: {vl_err}")
     except Exception as e:
         logger.warning(f"Chưa thể warmup danh sách giọng đọc: {e}")
 
@@ -133,6 +142,7 @@ app.include_router(credit_router)
 app.include_router(dictionary_router)
 app.include_router(voices_router)
 app.include_router(voice_clone_router)
+app.include_router(voice_library_router)
 app.include_router(tts_router)
 app.include_router(history_router)
 app.include_router(payment_router)

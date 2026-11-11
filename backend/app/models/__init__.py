@@ -13,6 +13,7 @@ from app.models.generation import Generation
 from app.models.payment import Coupon, Order, PaymentWebhookLog, PricingPlan
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
+from app.models.voice import Voice, VoiceFavorite
 
 __all__ = [
     "User",
@@ -34,4 +35,6 @@ __all__ = [
     "SystemSetting",
     "AffiliateWithdrawal",
     "SecurityViolationLog",
+    "Voice",
+    "VoiceFavorite",
 ]

@@ -20,6 +20,7 @@ from app.services.dictionary_service import DictionaryService
 from app.services.storage_service import StorageService
 from app.services.tts_script_parser import TTSScriptParser
 from app.services.tts_service import TTSService
+from app.services.voice_library_service import VoiceLibraryService
 
 logger = logging.getLogger(__name__)
 
@@ -303,6 +304,12 @@ class TTSJobService:
                 job.vtt_path = vtt_local_path
                 job.error_message = None
                 await db.commit()
+
+                # Tăng lượt sử dụng giọng trong thư viện (Issue #18)
+                try:
+                    await VoiceLibraryService.increment_voice_usage(db, job.voice)
+                except Exception as usage_err:
+                    logger.debug(f"Không thể cập nhật usage giọng {job.voice}: {usage_err}")
 
                 logger.info(
                     f"Job TTS #{job_id} hoàn tất thành công! ({final_duration:.1f}s, {final_size} bytes, định dạng {target_ext})"
