@@ -160,7 +160,7 @@ class VoiceLibraryService:
         """
         Lấy danh sách giọng từ bảng voices với bộ lọc đa chiều.
         """
-        conditions = []
+        conditions: List[Any] = []
 
         if only_active:
             conditions.append(Voice.is_active.is_(True))
