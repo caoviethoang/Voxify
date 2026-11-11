@@ -6,6 +6,7 @@ from app.models.admin import (
     SystemVoiceSetting,
 )
 from app.models.api_key import ApiKey, ApiUsageLog
+from app.models.audio_tool import AudioToolJob
 from app.models.cloned_voice import ClonedVoice, VoiceAbuseReport, VoiceConsentLog
 from app.models.credit import CreditTransaction
 from app.models.dictionary import PronunciationDictionary
@@ -37,4 +38,5 @@ __all__ = [
     "SecurityViolationLog",
     "Voice",
     "VoiceFavorite",
+    "AudioToolJob",
 ]
