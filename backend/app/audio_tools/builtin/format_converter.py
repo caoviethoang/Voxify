@@ -1,14 +1,11 @@
 """Công cụ Chuyển đổi định dạng âm thanh (Format Converter) — Audio Tools Framework."""
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
-from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Optional
 
 from app.audio_tools.base import AudioTool, AudioToolCategory
-from app.services.audio_service import AudioService
 
 logger = logging.getLogger(__name__)
 
@@ -92,34 +89,12 @@ class FormatConverterTool(AudioTool):
         if progress_cb:
             await progress_cb(35)
 
-        success = False
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            _, stderr = await proc.communicate()
-            if proc.returncode == 0:
-                success = True
-            else:
-                logger.warning(f"ffmpeg format converter thất bại: {stderr.decode('utf-8', errors='ignore')}")
-        except Exception as e:
-            logger.warning(f"Không thể chạy ffmpeg cho converter: {e}")
-
-        if not success:
-            await self._safe_copy_fallback(input_path, actual_output)
+        await self.run_ffmpeg_command(cmd, input_path, actual_output, "format_converter")
 
         if progress_cb:
             await progress_cb(100)
 
-        measured_duration = AudioService.measure_duration(actual_output)
-        size_bytes = os.path.getsize(actual_output) if os.path.exists(actual_output) else 0
-
-        return {
-            "output_path": actual_output,
-            "output_filename": Path(actual_output).name,
-            "duration": round(measured_duration, 2),
-            "size_bytes": size_bytes,
-            "extra": {"format": target_fmt, "bitrate": bitrate},
-        }
+        return self.build_tool_result(
+            actual_output,
+            extra={"format": target_fmt, "bitrate": bitrate},
+        )

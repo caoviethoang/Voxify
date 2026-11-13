@@ -461,3 +461,32 @@ async def test_api_job_not_found_and_errors() -> None:
             data={"params": "{}"},
         )
         assert res_no_audio.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_audio_tool_base_helpers(tmp_path):
+    """Kiểm thử run_ffmpeg_command và build_tool_result trên AudioTool base class (Issue #44)."""
+    tool = registry.get("trim")
+    assert tool is not None
+
+    input_file = tmp_path / "in.mp3"
+    input_file.write_bytes(b"dummy audio content")
+    output_file = tmp_path / "out.mp3"
+
+    # Test run_ffmpeg_command khi command không hợp lệ -> fallback copy
+    success = await tool.run_ffmpeg_command(
+        ["ffmpeg_invalid_command_xyz", "-i", str(input_file), str(output_file)],
+        input_path=str(input_file),
+        output_path=str(output_file),
+        tool_name="test_tool",
+    )
+    assert success is False
+    assert output_file.exists()
+    assert output_file.read_bytes() == b"dummy audio content"
+
+    # Test build_tool_result
+    result = tool.build_tool_result(str(output_file), extra={"custom": 123})
+    assert result["output_path"] == str(output_file)
+    assert result["output_filename"] == "out.mp3"
+    assert result["size_bytes"] == len(b"dummy audio content")
+    assert result["extra"] == {"custom": 123}
