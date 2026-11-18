@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.rate_limiter import check_login_rate_limit, reset_login_rate_limit
-from app.core.security import create_timed_token, decode_token
+from app.core.security import create_timed_token, decode_token, get_client_ip
 from app.core.security_validation import validate_password_strength
 from app.core.totp import generate_totp_secret, get_totp_uri, verify_totp_code
 from app.db import get_db
@@ -64,15 +64,24 @@ def _clear_refresh_cookie(response: Response) -> None:
 
 @router.post("/register", response_model=UserOut, summary="Đăng ký tài khoản mới")
 async def register(
+    request: Request,
     data: UserRegisterRequest,
     db: AsyncSession = Depends(get_db),
+    voxify_ref: Optional[str] = Cookie(None),
 ):
     try:
+        ref_code = data.ref_code or voxify_ref
+        client_ip = get_client_ip(request)
+        device_fingerprint = request.headers.get("x-device-fingerprint")
+
         user = await AuthService.register(
             db=db,
             email=data.email,
             password=data.password,
             full_name=data.full_name,
+            ref_code=ref_code,
+            client_ip=client_ip,
+            device_fingerprint=device_fingerprint,
         )
         return user
     except ValueError as e:
@@ -135,9 +144,19 @@ async def google_login(
     response: Response,
     data: GoogleAuthRequest,
     db: AsyncSession = Depends(get_db),
+    voxify_ref: Optional[str] = Cookie(None),
 ):
     try:
-        user = await AuthService.authenticate_google(db=db, credential=data.credential)
+        client_ip = get_client_ip(request)
+        device_fingerprint = request.headers.get("x-device-fingerprint")
+
+        user = await AuthService.authenticate_google(
+            db=db,
+            credential=data.credential,
+            ref_code=voxify_ref,
+            client_ip=client_ip,
+            device_fingerprint=device_fingerprint,
+        )
         access_token, raw_refresh = await AuthService.create_tokens(db, user)
         _set_refresh_cookie(response, raw_refresh)
         reset_login_rate_limit(request)

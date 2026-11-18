@@ -122,6 +122,12 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
 
+    # Tiếp thị liên kết (Affiliate Program - Issue #14)
+    affiliate_commission_rate: float = 0.25  # Tỷ lệ hoa hồng mặc định 25%
+    affiliate_cookie_days: int = 30  # Cookie tracking 30 ngày
+    affiliate_hold_period_days: int = 14  # Tạm giữ hoa hồng 14 ngày (đề phòng refund)
+    affiliate_min_payout_amount: int = 200000  # Rút tiền tối thiểu 200.000 VNĐ
+
     @field_validator("debug", mode="before")
     @classmethod
     def parse_debug(cls, v: Any) -> bool:

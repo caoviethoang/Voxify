@@ -21,6 +21,7 @@ from app.dependencies import get_current_active_user, get_tts_service
 from app.models.user import User
 from app.routes import (
     admin_router,
+    affiliate_router,
     audio_tools_router,
     auth_router,
     config_router,
@@ -150,6 +151,7 @@ app.include_router(history_router)
 app.include_router(payment_router)
 app.include_router(dashboard_router)
 app.include_router(developers_router)
+app.include_router(affiliate_router)
 app.include_router(admin_router)
 app.include_router(v1_router)
 

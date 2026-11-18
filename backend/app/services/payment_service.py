@@ -640,6 +640,13 @@ class PaymentService:
                 description=desc,
             )
 
+            # Ghi nhận hoa hồng Affiliate nếu người mua được giới thiệu (Issue #14)
+            try:
+                from app.services.affiliate_service import AffiliateService
+                await AffiliateService.record_order_commission(db, order=curr_order)
+            except Exception as aff_err:
+                logger.warning(f"Lỗi khi ghi nhận hoa hồng Affiliate cho đơn #{curr_order.order_code}: {aff_err}")
+
             # 8. Ghi sổ nhật ký webhook
             webhook_log = PaymentWebhookLog(
                 gateway=gateway,
@@ -855,3 +862,27 @@ class PaymentService:
         phone_hint = str(meta.get("phone_hint") or "******899")
         message = "Đã gửi lại mã xác thực 3D-Secure OTP mới đến điện thoại của bạn."
         return message, phone_hint, expires_in
+
+    @classmethod
+    async def refund_order(
+        cls,
+        db: AsyncSession,
+        order_id: int,
+        reason: str = "Order refunded",
+    ) -> Order:
+        """Hủy / hoàn tiền đơn hàng và tự động thu hồi hoa hồng Affiliate (Issue #14 - Req #2)."""
+        order = await cls.get_order_by_id_or_code(db, order_id)
+        if not order:
+            raise AppError(code="NOT_FOUND", message="Không tìm thấy đơn hàng", status_code=404)
+
+        order.status = OrderStatus.CANCELLED.value
+        order.updated_at = datetime.now(UTC)
+        await db.commit()
+
+        try:
+            from app.services.affiliate_service import AffiliateService
+            await AffiliateService.cancel_order_commission(db, order_id=order.id, reason=reason)
+        except Exception as e:
+            logger.warning(f"Lỗi khi thu hồi hoa hồng cho đơn #{order_id}: {e}")
+
+        return order

@@ -9,6 +9,7 @@ class UserRegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=6, description="Mật khẩu ít nhất 6 ký tự")
     full_name: Optional[str] = Field(default=None, max_length=150)
+    ref_code: Optional[str] = Field(default=None, max_length=50, description="Mã giới thiệu Affiliate")
 
 
 class UserLoginRequest(BaseModel):
@@ -39,6 +40,8 @@ class UserOut(BaseModel):
     credits: int
     credit_balance: Optional[int] = None
     two_factor_enabled: Optional[bool] = False
+    referral_code: Optional[str] = None
+    referred_by_id: Optional[int] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

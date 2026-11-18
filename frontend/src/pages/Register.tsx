@@ -1,15 +1,18 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { useAffiliateTracking } from '../hooks/useAffiliateTracking'
 
 export default function Register() {
   const { register } = useAuth()
   const navigate = useNavigate()
+  const { referralCode } = useAffiliateTracking()
 
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [customRefCode, setCustomRefCode] = useState(referralCode || '')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -34,10 +37,12 @@ export default function Register() {
     setError(null)
 
     try {
+      const activeRef = (customRefCode || referralCode || '').trim().toUpperCase()
       await register({
         email,
         password,
         full_name: fullName.trim() || undefined,
+        ref_code: activeRef || undefined,
       })
       navigate('/', { replace: true })
     } catch (err: unknown) {
@@ -70,6 +75,19 @@ export default function Register() {
           <h2 className="text-xl font-bold text-white tracking-tight">Tạo tài khoản mới</h2>
           <p className="text-xs text-white/40 mt-1">Đăng ký để nhận ngay 5.000 ký tự giọng đọc miễn phí</p>
         </div>
+
+        {/* Referral Welcome Banner */}
+        {(referralCode || customRefCode) && (
+          <div className="mb-5 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs flex items-center gap-2.5">
+            <span className="text-base">🎁</span>
+            <div>
+              <p className="font-semibold text-purple-200">Bạn được bạn bè giới thiệu!</p>
+              <p className="text-[11px] text-purple-300/80">
+                Mã giới thiệu: <span className="font-mono font-bold text-white">{customRefCode || referralCode}</span>
+              </p>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="mb-5 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
@@ -125,6 +143,19 @@ export default function Register() {
               placeholder="Nhập lại mật khẩu"
               required
               className="w-full bg-[#0f0f1a] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-brand-500/40 transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-white/70 mb-1.5">
+              Mã giới thiệu (không bắt buộc)
+            </label>
+            <input
+              type="text"
+              value={customRefCode}
+              onChange={e => setCustomRefCode(e.target.value.toUpperCase())}
+              placeholder="Ví dụ: VOX12345"
+              className="w-full bg-[#0f0f1a] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white font-mono placeholder:text-white/20 focus:outline-none focus:border-brand-500/40 transition-colors uppercase"
             />
           </div>
 

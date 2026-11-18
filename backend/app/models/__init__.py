@@ -5,6 +5,12 @@ from app.models.admin import (
     SystemSetting,
     SystemVoiceSetting,
 )
+from app.models.affiliate import (
+    AffiliateClick,
+    AffiliateCommission,
+    CommissionStatus,
+    WithdrawalStatus,
+)
 from app.models.api_key import ApiKey, ApiUsageLog
 from app.models.audio_tool import AudioToolJob
 from app.models.cloned_voice import ClonedVoice, VoiceAbuseReport, VoiceConsentLog
@@ -39,4 +45,8 @@ __all__ = [
     "Voice",
     "VoiceFavorite",
     "AudioToolJob",
+    "AffiliateClick",
+    "AffiliateCommission",
+    "CommissionStatus",
+    "WithdrawalStatus",
 ]
