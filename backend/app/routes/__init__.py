@@ -1,4 +1,5 @@
 from app.routes.admin import router as admin_router
+from app.routes.affiliate import router as affiliate_router
 from app.routes.api_keys import router as developers_router
 from app.routes.audio_tools import router as audio_tools_router
 from app.routes.auth import router as auth_router
@@ -16,6 +17,7 @@ from app.routes.voices import router as voices_router
 
 __all__ = [
     "admin_router",
+    "affiliate_router",
     "audio_tools_router",
     "auth_router",
     "config_router",

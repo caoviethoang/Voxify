@@ -120,6 +120,31 @@ async def create_tables() -> None:
                     sync_conn.execute(text("ALTER TABLE users ADD COLUMN is_banned BOOLEAN NOT NULL DEFAULT 0"))
                 if user_cols and "ban_reason" not in user_cols:
                     sync_conn.execute(text("ALTER TABLE users ADD COLUMN ban_reason VARCHAR(255)"))
+                if user_cols and "referral_code" not in user_cols:
+                    sync_conn.execute(text("ALTER TABLE users ADD COLUMN referral_code VARCHAR(32)"))
+                    sync_conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_referral_code ON users (referral_code)"))
+                if user_cols and "referred_by_id" not in user_cols:
+                    sync_conn.execute(text("ALTER TABLE users ADD COLUMN referred_by_id INTEGER REFERENCES users(id)"))
+                    sync_conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_referred_by_id ON users (referred_by_id)"))
+                if user_cols and "registration_ip" not in user_cols:
+                    sync_conn.execute(text("ALTER TABLE users ADD COLUMN registration_ip VARCHAR(45)"))
+                if user_cols and "device_fingerprint" not in user_cols:
+                    sync_conn.execute(text("ALTER TABLE users ADD COLUMN device_fingerprint VARCHAR(100)"))
+
+                w_cols = [r[1] for r in sync_conn.execute(text("PRAGMA table_info(affiliate_withdrawals)")).fetchall()]
+                if w_cols:
+                    if "bank_account_number" not in w_cols and "account_number" in w_cols:
+                        sync_conn.execute(text("ALTER TABLE affiliate_withdrawals ADD COLUMN bank_account_number VARCHAR(50)"))
+                        sync_conn.execute(text("UPDATE affiliate_withdrawals SET bank_account_number = account_number WHERE bank_account_number IS NULL"))
+                    if "bank_account_holder" not in w_cols and "account_holder" in w_cols:
+                        sync_conn.execute(text("ALTER TABLE affiliate_withdrawals ADD COLUMN bank_account_holder VARCHAR(150)"))
+                        sync_conn.execute(text("UPDATE affiliate_withdrawals SET bank_account_holder = account_holder WHERE bank_account_holder IS NULL"))
+                    if "note" not in w_cols and "admin_note" in w_cols:
+                        sync_conn.execute(text("ALTER TABLE affiliate_withdrawals ADD COLUMN note TEXT"))
+                        sync_conn.execute(text("UPDATE affiliate_withdrawals SET note = admin_note WHERE note IS NULL"))
+                    if "updated_at" not in w_cols:
+                        sync_conn.execute(text("ALTER TABLE affiliate_withdrawals ADD COLUMN updated_at TIMESTAMP"))
+                        sync_conn.execute(text("UPDATE affiliate_withdrawals SET updated_at = created_at WHERE updated_at IS NULL"))
 
                 tx_cols = [r[1] for r in sync_conn.execute(text("PRAGMA table_info(credit_transactions)")).fetchall()]
                 if tx_cols:

@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base, CreatedAtMixin, TimestampMixin
 
@@ -66,6 +66,8 @@ class AffiliateWithdrawal(Base, TimestampMixin):
     bank_account_holder: Mapped[str] = mapped_column(String(150), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False, index=True)  # pending | approved | rejected
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    user: Mapped["User"] = relationship("User", back_populates="affiliate_withdrawals", lazy="select")
 
 
 class SecurityViolationLog(Base, CreatedAtMixin):

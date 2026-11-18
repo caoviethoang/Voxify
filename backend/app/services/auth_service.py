@@ -47,8 +47,11 @@ class AuthService:
         email: str,
         password: str,
         full_name: Optional[str] = None,
+        ref_code: Optional[str] = None,
+        client_ip: Optional[str] = None,
+        device_fingerprint: Optional[str] = None,
     ) -> User:
-        """Đăng ký tài khoản người dùng mới."""
+        """Đăng ký tài khoản người dùng mới (có tích hợp Affiliate & Anti-fraud - Issue #14)."""
         settings = get_settings()
         clean_email = email.lower().strip()
 
@@ -61,6 +64,30 @@ class AuthService:
         if not is_strong:
             raise ValueError(pw_msg)
 
+        from app.services.affiliate_service import AffiliateService
+
+        # Tạo mã giới thiệu riêng cho người dùng mới
+        user_referral_code = await AffiliateService.generate_referral_code(db)
+
+        # Xử lý người giới thiệu (Affiliate Referrer)
+        referred_by_id = None
+        if ref_code:
+            clean_ref = ref_code.strip().upper()
+            stmt_ref = select(User).where(User.referral_code == clean_ref)
+            referrer = (await db.execute(stmt_ref)).scalar_one_or_none()
+            if referrer and referrer.is_active and not referrer.is_banned:
+                is_valid, fraud_reason = await AffiliateService.validate_referral_anti_fraud(
+                    db=db,
+                    referrer=referrer,
+                    candidate_email=clean_email,
+                    client_ip=client_ip,
+                    device_fingerprint=device_fingerprint,
+                )
+                if is_valid:
+                    referred_by_id = referrer.id
+                else:
+                    logger.warning(f"Từ chối gắn affiliate referrer: {fraud_reason}")
+
         user = User(
             email=clean_email,
             hashed_password=hash_password(password),
@@ -72,6 +99,10 @@ class AuthService:
             is_verified=not settings.require_email_verification,
             credit_balance=0,
             credits=0,
+            referral_code=user_referral_code,
+            referred_by_id=referred_by_id,
+            registration_ip=client_ip,
+            device_fingerprint=device_fingerprint,
         )
         db.add(user)
         await db.flush()
@@ -244,6 +275,9 @@ class AuthService:
     async def authenticate_google(
         db: AsyncSession,
         credential: str,
+        ref_code: Optional[str] = None,
+        client_ip: Optional[str] = None,
+        device_fingerprint: Optional[str] = None,
     ) -> User:
         """Xác thực Google ID Token và đăng nhập / đăng ký người dùng."""
         settings = get_settings()
@@ -278,6 +312,30 @@ class AuthService:
             await db.commit()
             return user
 
+        from app.services.affiliate_service import AffiliateService
+
+        # Tạo mã giới thiệu riêng cho người dùng mới
+        user_referral_code = await AffiliateService.generate_referral_code(db)
+
+        # Xử lý người giới thiệu (Affiliate Referrer)
+        referred_by_id = None
+        if ref_code:
+            clean_ref = ref_code.strip().upper()
+            stmt_ref = select(User).where(User.referral_code == clean_ref)
+            referrer = (await db.execute(stmt_ref)).scalar_one_or_none()
+            if referrer and referrer.is_active and not referrer.is_banned:
+                is_valid, fraud_reason = await AffiliateService.validate_referral_anti_fraud(
+                    db=db,
+                    referrer=referrer,
+                    candidate_email=email,
+                    client_ip=client_ip,
+                    device_fingerprint=device_fingerprint,
+                )
+                if is_valid:
+                    referred_by_id = referrer.id
+                else:
+                    logger.warning(f"Từ chối gắn affiliate referrer: {fraud_reason}")
+
         # Tạo mới tài khoản qua Google
         new_user = User(
             email=email,
@@ -290,6 +348,10 @@ class AuthService:
             is_verified=True,
             credit_balance=0,
             credits=0,
+            referral_code=user_referral_code,
+            referred_by_id=referred_by_id,
+            registration_ip=client_ip,
+            device_fingerprint=device_fingerprint,
         )
         db.add(new_user)
         await db.flush()

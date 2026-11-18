@@ -9,6 +9,8 @@ export interface User {
   is_verified: boolean
   credits: number
   credit_balance?: number
+  referral_code?: string | null
+  referred_by_id?: number | null
   created_at: string
 }
 
@@ -23,6 +25,7 @@ export interface RegisterParams {
   email: string
   password: string
   full_name?: string
+  ref_code?: string
 }
 
 export interface LoginParams {

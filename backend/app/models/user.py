@@ -1,7 +1,7 @@
 """Model người dùng."""
 from typing import Optional
 
-from sqlalchemy import Boolean, Integer, String
+from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base, TimestampMixin
@@ -28,6 +28,14 @@ class User(Base, TimestampMixin):
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ban_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
+    # Tiếp thị liên kết & Chống gian lận (Affiliate & Anti-fraud - Issue #14)
+    referral_code: Mapped[Optional[str]] = mapped_column(String(32), unique=True, nullable=True, index=True)
+    referred_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    registration_ip: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    device_fingerprint: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
     # Cache cột users.credit_balance cập nhật trong cùng transaction DB (sổ cái ledger)
     credit_balance: Mapped[int] = mapped_column(Integer, default=10000, nullable=False)
     # Giữ cột credits để tương thích ngược với code cũ / migration cũ
@@ -53,4 +61,28 @@ class User(Base, TimestampMixin):
     )
     api_keys: Mapped[list["ApiKey"]] = relationship(
         "ApiKey", back_populates="user", cascade="all, delete-orphan", lazy="select"
+    )
+
+    # Relationships cho Affiliate (Issue #14)
+    referrer: Mapped[Optional["User"]] = relationship(
+        "User", remote_side="User.id", back_populates="referrals", lazy="select"
+    )
+    referrals: Mapped[list["User"]] = relationship(
+        "User", back_populates="referrer", lazy="select"
+    )
+    affiliate_clicks: Mapped[list["AffiliateClick"]] = relationship(
+        "AffiliateClick", back_populates="affiliate_user", cascade="all, delete-orphan", lazy="select"
+    )
+    affiliate_commissions: Mapped[list["AffiliateCommission"]] = relationship(
+        "AffiliateCommission",
+        foreign_keys="[AffiliateCommission.affiliate_user_id]",
+        back_populates="affiliate_user",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+    affiliate_withdrawals: Mapped[list["AffiliateWithdrawal"]] = relationship(
+        "AffiliateWithdrawal",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="select",
     )

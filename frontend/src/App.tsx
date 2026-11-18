@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { ToastProvider } from './context/ToastContext'
+import { useAffiliateTracking } from './hooks/useAffiliateTracking'
 import AppLayout from './layouts/AppLayout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Dashboard from './pages/Dashboard'
@@ -10,7 +11,7 @@ import VoiceLibrary from './pages/VoiceLibrary'
 import CreditHistory from './pages/CreditHistory'
 import History from './pages/History'
 import Pricing from './pages/Pricing'
-import PlaceholderPage from './pages/PlaceholderPage'
+import Affiliate from './pages/Affiliate'
 import Developers from './pages/Developers'
 import Profile from './pages/Profile'
 import AudioToolsHub from './pages/AudioToolsHub'
@@ -25,14 +26,13 @@ import TermsOfService from './pages/TermsOfService'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import RefundPolicy from './pages/RefundPolicy'
 
-export default function App() {
+function AppRoutes() {
+  useAffiliateTracking()
+
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <ToastProvider>
-          <Routes>
-            {/* Các trang đăng nhập / đăng ký công khai */}
-            <Route path="/login" element={<Login />} />
+    <Routes>
+      {/* Các trang đăng nhập / đăng ký công khai */}
+      <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
@@ -78,21 +78,22 @@ export default function App() {
               {/* Các trang công cụ, lịch sử, mở rộng */}
               <Route path="/history" element={<History />} />
               <Route path="/pricing" element={<Pricing />} />
-              <Route
-                path="/affiliate"
-                element={
-                  <PlaceholderPage
-                    title="Giới Thiệu Bạn Bè (Affiliate 25%)"
-                    subtitle="Chia sẻ Voxify tới đồng nghiệp & cộng đồng để nhận ngay 25% hoa hồng trọn đời."
-                  />
-                }
-              />
+              <Route path="/affiliate" element={<Affiliate />} />
               <Route path="/developers" element={<Developers />} />
 
               {/* Trang 404 */}
               <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>
+  )
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <AppRoutes />
         </ToastProvider>
       </AuthProvider>
     </ThemeProvider>
