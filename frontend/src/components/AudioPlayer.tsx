@@ -2,6 +2,17 @@ import { useRef, useEffect, useState } from 'react'
 import { Download, FileText, Play, Pause, Sparkles } from 'lucide-react'
 import { formatDuration } from '../utils/formatters'
 
+interface Props {
+  url: string | null
+  voiceName: string
+  isPreview?: boolean
+  duration?: number
+  format?: 'mp3' | 'wav'
+  srtUrl?: string
+  vttUrl?: string
+  onDownload?: () => void
+}
+
 export default function AudioPlayer({
   url,
   voiceName,
