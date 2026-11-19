@@ -24,46 +24,11 @@ import {
   RotateCcw,
   Loader2,
 } from 'lucide-react'
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatDuration(seconds: number): string {
-  if (!seconds || seconds <= 0) return '0:00'
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
-
-function formatTotalDuration(seconds: number): string {
-  if (!seconds || seconds <= 0) return '0 giây'
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  const secs = Math.floor(seconds % 60)
-
-  if (hours > 0) {
-    return `${hours} giờ ${minutes} phút`
-  }
-  if (minutes > 0) {
-    return `${minutes} phút ${secs > 0 ? `${secs}s` : ''}`
-  }
-  return `${secs} giây`
-}
-
-function formatRelativeTime(dateStr?: string): string {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffSecs = Math.floor(diffMs / 1000)
-  if (diffSecs < 60) return 'vừa xong'
-  const diffMins = Math.floor(diffSecs / 60)
-  if (diffMins < 60) return `${diffMins} phút trước`
-  const diffHours = Math.floor(diffMins / 60)
-  if (diffHours < 24) return `${diffHours} giờ trước`
-  const diffDays = Math.floor(diffHours / 24)
-  if (diffDays < 30) return `${diffDays} ngày trước`
-  return date.toLocaleDateString('vi-VN')
-}
+import {
+  formatDuration,
+  formatTotalDuration,
+  formatRelativeTime,
+} from '../utils/formatters'
 
 // ─── Mini Audio Player Component ──────────────────────────────────────────────
 

@@ -34,40 +34,7 @@ import {
   type HistoryItem,
   type HistoryListParams,
 } from '../api/history'
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatDuration(seconds: number): string {
-  if (!seconds || seconds <= 0) return '0:00'
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
-
-function formatRelativeTime(dateStr: string): string {
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffSecs = Math.floor(diffMs / 1000)
-  if (diffSecs < 60) return 'vừa xong'
-  const diffMins = Math.floor(diffSecs / 60)
-  if (diffMins < 60) return `${diffMins} phút trước`
-  const diffHours = Math.floor(diffMins / 60)
-  if (diffHours < 24) return `${diffHours} giờ trước`
-  const diffDays = Math.floor(diffHours / 24)
-  if (diffDays < 30) return `${diffDays} ngày trước`
-  return date.toLocaleDateString('vi-VN')
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleString('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
+import { formatDuration, formatRelativeTime, formatDate } from '../utils/formatters'
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 

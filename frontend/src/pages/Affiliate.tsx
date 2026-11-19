@@ -29,6 +29,7 @@ import {
   type AffiliateWithdrawalItem,
 } from '../api/affiliate'
 import { useToast } from '../hooks/useToast'
+import { extractApiErrorMessage } from '../utils/apiError'
 
 const VIETNAM_BANKS = [
   { code: 'MB', name: 'MBBank (Quân Đội)' },
@@ -80,12 +81,7 @@ export default function Affiliate() {
       const data = await apiGetAffiliateDashboard()
       setDashboard(data)
     } catch (err: unknown) {
-      let msg = 'Không thể tải dữ liệu Affiliate.'
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axiosErr = err as { response?: { data?: { detail?: string } } }
-        msg = axiosErr.response?.data?.detail || msg
-      }
-      error(msg)
+      error(extractApiErrorMessage(err, 'Không thể tải dữ liệu Affiliate.'))
     } finally {
       setIsLoading(false)
     }
@@ -175,12 +171,7 @@ export default function Affiliate() {
       setIsWithdrawModalOpen(false)
       loadData()
     } catch (err: unknown) {
-      let msg = 'Không thể gửi yêu cầu rút tiền.'
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axiosErr = err as { response?: { data?: { detail?: string } } }
-        msg = axiosErr.response?.data?.detail || msg
-      }
-      setWithdrawError(msg)
+      setWithdrawError(extractApiErrorMessage(err, 'Không thể gửi yêu cầu rút tiền.'))
     } finally {
       setIsSubmittingWithdraw(false)
     }
@@ -203,12 +194,7 @@ export default function Affiliate() {
       setIsCustomizeCodeModalOpen(false)
       loadData()
     } catch (err: unknown) {
-      let msg = 'Không thể đổi mã giới thiệu.'
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axiosErr = err as { response?: { data?: { detail?: string } } }
-        msg = axiosErr.response?.data?.detail || msg
-      }
-      setCodeError(msg)
+      setCodeError(extractApiErrorMessage(err, 'Không thể đổi mã giới thiệu.'))
     } finally {
       setIsSubmittingCode(false)
     }

@@ -1,23 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { Download, FileText, Play, Pause, Sparkles } from 'lucide-react'
-
-interface Props {
-  url: string | null
-  voiceName: string
-  isPreview?: boolean
-  duration?: number
-  format?: 'mp3' | 'wav'
-  srtUrl?: string
-  vttUrl?: string
-  onDownload?: () => void
-}
-
-function formatDuration(seconds: number): string {
-  if (isNaN(seconds) || seconds < 0) return '00:00'
-  const mins = Math.floor(seconds / 60)
-  const secs = Math.floor(seconds % 60)
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-}
+import { formatDuration } from '../utils/formatters'
 
 export default function AudioPlayer({
   url,
@@ -184,7 +167,7 @@ export default function AudioPlayer({
 
         {/* Time display */}
         <span className="text-[11px] font-mono text-slate-500 dark:text-white/50 shrink-0">
-          {formatDuration(currentTime)}
+          {formatDuration(currentTime, true)}
         </span>
 
         {/* Seekbar */}
@@ -203,7 +186,7 @@ export default function AudioPlayer({
 
         {/* Total Duration */}
         <span className="text-[11px] font-mono text-slate-500 dark:text-white/50 shrink-0">
-          {formatDuration(audioDuration)}
+          {formatDuration(audioDuration, true)}
         </span>
 
         {/* Speed button */}

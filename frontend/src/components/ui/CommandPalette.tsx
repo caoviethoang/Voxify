@@ -28,7 +28,7 @@ interface CommandItem {
   id: string
   title: string
   category: string
-  icon: any
+  icon: React.ComponentType<{ className?: string }>
   action: () => void
   keywords?: string
 }
