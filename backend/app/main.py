@@ -29,6 +29,7 @@ from app.routes import (
     dashboard_router,
     developers_router,
     dictionary_router,
+    dubbing_router,
     history_router,
     payment_router,
     tts_router,
@@ -146,6 +147,7 @@ app.include_router(voices_router)
 app.include_router(voice_clone_router)
 app.include_router(voice_library_router)
 app.include_router(audio_tools_router)
+app.include_router(dubbing_router)
 app.include_router(tts_router)
 app.include_router(history_router)
 app.include_router(payment_router)

@@ -16,6 +16,7 @@ from app.models.audio_tool import AudioToolJob
 from app.models.cloned_voice import ClonedVoice, VoiceAbuseReport, VoiceConsentLog
 from app.models.credit import CreditTransaction
 from app.models.dictionary import PronunciationDictionary
+from app.models.dubbing import DubbingJob
 from app.models.generation import Generation
 from app.models.payment import Coupon, Order, PaymentWebhookLog, PricingPlan
 from app.models.refresh_token import RefreshToken
@@ -45,6 +46,7 @@ __all__ = [
     "Voice",
     "VoiceFavorite",
     "AudioToolJob",
+    "DubbingJob",
     "AffiliateClick",
     "AffiliateCommission",
     "CommissionStatus",

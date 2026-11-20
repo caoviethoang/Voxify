@@ -27,6 +27,7 @@ import {
   Disc,
   Coins,
   Wrench,
+  Captions,
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -128,6 +129,7 @@ export default function Sidebar({
   const allNavItems: Record<string, NavItemDef> = {
     dashboard: { id: 'dashboard', label: t('nav.dashboard') || 'Trang chủ', path: '/', icon: LayoutDashboard },
     tts: { id: 'tts', label: 'Studio (Text to Speech)', path: '/studio', icon: Mic },
+    dubbing: { id: 'dubbing', label: 'Lồng tiếng phụ đề', path: '/dubbing', icon: Captions, badge: 'Mới' },
     library: { id: 'library', label: 'Thư viện giọng', path: '/voices', icon: Volume2 },
     tools: { id: 'tools', label: 'Công cụ âm thanh', path: '/tools', icon: Wrench },
     history: { id: 'history', label: t('nav.processHistory') || 'Lịch sử xử lý', path: '/history', icon: History },
@@ -304,6 +306,31 @@ export default function Sidebar({
               >
                 <Pin className="w-3 h-3" />
               </button>
+            )}
+          </NavLink>
+
+          <NavLink
+            to="/dubbing"
+            onClick={handleLinkClick}
+            title="Lồng tiếng phụ đề (SRT/VTT)"
+            className={({ isActive }) =>
+              `flex items-center rounded-control text-xs font-medium transition-all group ${
+                isCollapsedMode ? 'justify-center py-2.5 px-0' : 'justify-between px-2.5 py-2'
+              } ${
+                isActive
+                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/80 dark:bg-indigo-600/20 dark:text-white dark:border-indigo-500/30 font-semibold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-white/70 dark:hover:text-white dark:hover:bg-[#12151C]'
+              }`
+            }
+          >
+            <div className={`flex items-center ${isCollapsedMode ? 'justify-center' : 'gap-2.5 truncate'}`}>
+              <Captions className="w-4 h-4 flex-shrink-0 text-indigo-500 dark:text-indigo-400" />
+              {!isCollapsedMode && <span>Lồng tiếng phụ đề</span>}
+            </div>
+            {!isCollapsedMode && (
+              <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-200/80 dark:bg-indigo-500/20 dark:text-indigo-300 dark:border-indigo-500/30">
+                Mới
+              </span>
             )}
           </NavLink>
         </div>
