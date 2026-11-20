@@ -7,6 +7,7 @@ from app.routes.config import router as config_router
 from app.routes.credits import router as credit_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.dictionary import router as dictionary_router
+from app.routes.dubbing import router as dubbing_router
 from app.routes.history import router as history_router
 from app.routes.payments import router as payment_router
 from app.routes.tts import router as tts_router
@@ -25,6 +26,7 @@ __all__ = [
     "dashboard_router",
     "developers_router",
     "dictionary_router",
+    "dubbing_router",
     "history_router",
     "payment_router",
     "tts_router",

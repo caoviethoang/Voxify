@@ -16,6 +16,7 @@ import Developers from './pages/Developers'
 import Profile from './pages/Profile'
 import AudioToolsHub from './pages/AudioToolsHub'
 import AudioToolWorkspace from './pages/AudioToolWorkspace'
+import SubtitleDubbing from './pages/SubtitleDubbing'
 import NotFound from './pages/NotFound'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -60,6 +61,10 @@ function AppRoutes() {
               <Route path="/studio" element={<TextToSpeech />} />
               <Route path="/tts" element={<TextToSpeech />} />
               <Route path="/voice/tts" element={<TextToSpeech />} />
+
+              {/* Lồng tiếng phụ đề video (Issue #21) */}
+              <Route path="/dubbing" element={<SubtitleDubbing />} />
+              <Route path="/subtitles" element={<SubtitleDubbing />} />
 
               {/* Thư viện giọng đọc */}
               <Route path="/voices" element={<VoiceLibrary />} />
