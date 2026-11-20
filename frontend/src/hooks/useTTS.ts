@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { synthesize, type SynthesizeParams } from '../api/tts'
+import { extractApiErrorMessage } from '../utils/apiError'
 
 export interface HistoryItem {
   id: string
@@ -48,16 +49,7 @@ export function useTTS() {
       setHistory(prev => [item, ...prev])
       return { url, blob, creditBalance: blob.creditBalance }
     } catch (err: unknown) {
-      let msg = 'Có lỗi xảy ra khi tạo giọng nói.'
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axiosErr = err as { response?: { data?: { detail?: string; error?: { message?: string } } } }
-        msg =
-          axiosErr.response?.data?.detail ||
-          axiosErr.response?.data?.error?.message ||
-          msg
-      } else if (err instanceof Error) {
-        msg = err.message
-      }
+      const msg = extractApiErrorMessage(err, 'Có lỗi xảy ra khi tạo giọng nói.')
       setError(msg)
       throw new Error(msg)
     } finally {

@@ -8,6 +8,7 @@ import {
   getJobSubtitleUrl,
 } from '../api/tts'
 import { useAuth } from './useAuth'
+import { extractApiErrorMessage } from '../utils/apiError'
 
 const ACTIVE_JOB_KEY = 'voxify_active_tts_job_id'
 
@@ -80,13 +81,7 @@ export function useTTSJob() {
       } catch (err: unknown) {
         setIsJobRunning(false)
         stopPolling()
-        let msg = 'Có lỗi xảy ra khi khởi tạo tác vụ.'
-        if (err && typeof err === 'object' && 'response' in err) {
-          const axiosErr = err as { response?: { data?: { detail?: string } } }
-          msg = axiosErr.response?.data?.detail || msg
-        } else if (err instanceof Error) {
-          msg = err.message
-        }
+        const msg = extractApiErrorMessage(err, 'Có lỗi xảy ra khi khởi tạo tác vụ.')
         setJobError(msg)
         throw new Error(msg)
       }

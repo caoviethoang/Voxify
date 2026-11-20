@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiForgotPassword } from '../api/auth'
+import { extractApiErrorMessage } from '../utils/apiError'
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('')
@@ -20,7 +21,7 @@ export default function ForgotPassword() {
       const res = await apiForgotPassword(email)
       setMessage(res.message)
     } catch (err: unknown) {
-      setError('Có lỗi xảy ra khi gửi yêu cầu. Vui lòng thử lại.')
+      setError(extractApiErrorMessage(err, 'Có lỗi xảy ra khi gửi yêu cầu. Vui lòng thử lại.'))
     } finally {
       setIsLoading(false)
     }

@@ -1,7 +1,7 @@
 import { FolderOpen } from 'lucide-react'
 
 interface EmptyStateProps {
-  icon?: any
+  icon?: React.ComponentType<{ className?: string }>
   title: string
   description?: string
   action?: {

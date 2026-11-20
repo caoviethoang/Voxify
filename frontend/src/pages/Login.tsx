@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { extractApiErrorMessage } from '../utils/apiError'
 
 export default function Login() {
   const { login, googleLogin } = useAuth()
@@ -20,7 +21,7 @@ export default function Login() {
   useEffect(() => {
     if (!googleClientId) return
 
-    let checkInterval: any = null
+    let checkInterval: ReturnType<typeof setInterval> | null = null
 
     const initGsi = () => {
       if (window.google?.accounts?.id && googleBtnRef.current) {
@@ -35,12 +36,7 @@ export default function Login() {
                   await googleLogin(response.credential)
                   navigate(from, { replace: true })
                 } catch (err: unknown) {
-                  let msg = 'Đăng nhập Google thất bại.'
-                  if (err && typeof err === 'object' && 'response' in err) {
-                    const axiosErr = err as { response?: { data?: { detail?: string } } }
-                    msg = axiosErr.response?.data?.detail || msg
-                  }
-                  setError(msg)
+                  setError(extractApiErrorMessage(err, 'Đăng nhập Google thất bại.'))
                 } finally {
                   setIsLoading(false)
                 }
@@ -85,14 +81,7 @@ export default function Login() {
       await login({ email, password })
       navigate(from, { replace: true })
     } catch (err: unknown) {
-      let msg = 'Đăng nhập không thành công.'
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axiosErr = err as { response?: { data?: { detail?: string } } }
-        msg = axiosErr.response?.data?.detail || msg
-      } else if (err instanceof Error) {
-        msg = err.message
-      }
-      setError(msg)
+      setError(extractApiErrorMessage(err, 'Đăng nhập không thành công.'))
     } finally {
       setIsLoading(false)
     }

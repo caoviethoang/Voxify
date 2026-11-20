@@ -23,7 +23,7 @@ declare global {
               locale?: string
             }
           ) => void
-          prompt: (notification?: (notification: any) => void) => void
+          prompt: (notification?: (notification: unknown) => void) => void
         }
       }
     }

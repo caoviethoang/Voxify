@@ -201,7 +201,7 @@ export default function DictionaryModal({ isOpen, onClose, currentVoice = 'vi-VN
               </label>
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value as any)}
+                onChange={(e) => setCategory(e.target.value as 'abbreviation' | 'date' | 'number' | 'name' | 'custom')}
                 className="w-full bg-white dark:bg-[#181C25] border border-slate-200 dark:border-white/[0.1] rounded-control px-2 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
               >
                 <option value="abbreviation">Viết tắt</option>

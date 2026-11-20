@@ -7,6 +7,7 @@ import { DynamicParamsForm } from '../components/tools/DynamicParamsForm'
 import { AudioWaveformWorkspace } from '../components/tools/AudioWaveformWorkspace'
 import { ToolIcon } from '../components/tools/ToolIcon'
 import { useToast } from '../hooks/useToast'
+import { extractApiErrorMessage } from '../utils/apiError'
 import {
   ArrowLeft,
   Play,
@@ -189,8 +190,7 @@ export default function AudioToolWorkspace() {
       }
     } catch (err: unknown) {
       setIsSubmitting(false)
-      const errorObj = err as { response?: { data?: { detail?: string } } }
-      const msg = errorObj.response?.data?.detail || 'Không thể tạo tác vụ xử lý. Vui lòng kiểm tra lại.'
+      const msg = extractApiErrorMessage(err, 'Không thể tạo tác vụ xử lý. Vui lòng kiểm tra lại.')
       toast.error(msg)
     }
   }

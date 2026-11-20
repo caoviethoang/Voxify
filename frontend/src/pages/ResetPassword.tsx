@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { apiResetPassword } from '../api/auth'
 import { useAppConfig } from '../hooks/useAppConfig'
+import { extractApiErrorMessage } from '../utils/apiError'
 
 export default function ResetPassword() {
   const { config } = useAppConfig()
@@ -42,9 +43,8 @@ export default function ResetPassword() {
       setTimeout(() => {
         navigate('/login')
       }, 2500)
-    } catch (err: any) {
-      const msg = err.response?.data?.detail || 'Không thể đặt lại mật khẩu. Vui lòng thử lại.'
-      setError(msg)
+    } catch (err: unknown) {
+      setError(extractApiErrorMessage(err, 'Không thể đặt lại mật khẩu. Vui lòng thử lại.'))
     } finally {
       setLoading(false)
     }

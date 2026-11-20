@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useAffiliateTracking } from '../hooks/useAffiliateTracking'
+import { extractApiErrorMessage } from '../utils/apiError'
 
 export default function Register() {
   const { register } = useAuth()
@@ -46,14 +47,7 @@ export default function Register() {
       })
       navigate('/', { replace: true })
     } catch (err: unknown) {
-      let msg = 'Đăng ký không thành công.'
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axiosErr = err as { response?: { data?: { detail?: string } } }
-        msg = axiosErr.response?.data?.detail || msg
-      } else if (err instanceof Error) {
-        msg = err.message
-      }
-      setError(msg)
+      setError(extractApiErrorMessage(err, 'Đăng ký không thành công.'))
     } finally {
       setIsLoading(false)
     }

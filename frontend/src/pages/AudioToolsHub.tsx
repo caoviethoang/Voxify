@@ -14,6 +14,7 @@ import {
   AlertCircle,
   RefreshCw,
 } from 'lucide-react'
+import { formatDate } from '../utils/formatters'
 
 export default function AudioToolsHub() {
   const navigate = useNavigate()
@@ -212,7 +213,7 @@ export default function AudioToolsHub() {
                     </div>
                     <div className="text-[11px] text-slate-400 flex items-center gap-2">
                       <span>
-                        {new Date(job.created_at).toLocaleString('vi-VN')}
+                        {formatDate(job.created_at)}
                       </span>
                       {job.credit_used > 0 && (
                         <span>• {job.credit_used} credit</span>

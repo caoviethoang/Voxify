@@ -15,6 +15,7 @@ import {
 import { createVoiceClone, getVoiceCloneLimits, type VoiceCloneQuota, type ClonedVoice } from '../../api/voice_clone'
 import { useAuth } from '../../hooks/useAuth'
 import { useToast } from '../../hooks/useToast'
+import { extractApiErrorMessage } from '../../utils/apiError'
 
 interface VoiceCloneModalProps {
   isOpen: boolean
@@ -242,10 +243,7 @@ export default function VoiceCloneModal({ isOpen, onClose, onVoiceCreated }: Voi
       }
       onClose()
     } catch (err: unknown) {
-      const errorMsg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        (err as Error).message ||
-        'Không thể tạo giọng clone lúc này.'
+      const errorMsg = extractApiErrorMessage(err, 'Không thể tạo giọng clone lúc này.')
       toast.error(errorMsg)
     } finally {
       setIsSubmitting(false)
